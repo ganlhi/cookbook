@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \Recipe.createdAt, order: .reverse) private var recipes: [Recipe]
     @Query(sort: \Ingredient.name) private var allIngredients: [Ingredient]
 
@@ -9,9 +10,14 @@ struct ContentView: View {
     @State private var searchText = ""
     @State private var selectedIngredients: Set<String> = []
 
+    @State private var isSelecting = false
+    @State private var selection: Set<PersistentIdentifier> = []
+    @State private var showingImporter = false
+    @State private var importMessage: String?
+
     var body: some View {
         NavigationStack {
-            List {
+            List(selection: $selection) {
                 if !usedIngredients.isEmpty {
                     Section {
                         ingredientFilterChips
@@ -28,25 +34,114 @@ struct ContentView: View {
                     }
                 }
             }
+            .environment(\.editMode, .constant(isSelecting ? .active : .inactive))
             .navigationDestination(for: Recipe.self) { recipe in
                 RecipeDetailView(recipe: recipe)
             }
             .navigationTitle("Recettes")
             .searchable(text: $searchText, prompt: "Rechercher une recette")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showingAddSheet = true
-                    } label: {
-                        Label("Ajouter", systemImage: "plus")
-                    }
-                }
-            }
+            .toolbar { toolbarContent }
             .sheet(isPresented: $showingAddSheet) {
                 RecipeFormView()
             }
+            .fileImporter(
+                isPresented: $showingImporter,
+                allowedContentTypes: [.json]
+            ) { result in
+                handleImport(result)
+            }
+            .alert(
+                "Import",
+                isPresented: Binding(
+                    get: { importMessage != nil },
+                    set: { if !$0 { importMessage = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(importMessage ?? "")
+            }
         }
     }
+
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        if isSelecting {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Terminé") {
+                    isSelecting = false
+                    selection = []
+                }
+            }
+            ToolbarItem(placement: .primaryAction) {
+                ShareLink(
+                    item: CookbookExport(recipes: selectedRecipeDTOs),
+                    preview: SharePreview("Recettes sélectionnées")
+                ) {
+                    Label("Exporter la sélection (\(selection.count))", systemImage: "square.and.arrow.up")
+                }
+                .disabled(selection.isEmpty)
+            }
+        } else {
+            ToolbarItem(placement: .secondaryAction) {
+                ShareLink(
+                    item: CookbookExport(recipes: recipes.map(RecipeDTO.init)),
+                    preview: SharePreview("Toutes les recettes")
+                ) {
+                    Label("Tout exporter", systemImage: "square.and.arrow.up")
+                }
+                .disabled(recipes.isEmpty)
+            }
+            ToolbarItem(placement: .secondaryAction) {
+                Button {
+                    isSelecting = true
+                } label: {
+                    Label("Sélectionner…", systemImage: "checkmark.circle")
+                }
+                .disabled(recipes.isEmpty)
+            }
+            ToolbarItem(placement: .secondaryAction) {
+                Button {
+                    showingImporter = true
+                } label: {
+                    Label("Importer…", systemImage: "square.and.arrow.down")
+                }
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showingAddSheet = true
+                } label: {
+                    Label("Ajouter", systemImage: "plus")
+                }
+            }
+        }
+    }
+
+    // MARK: - Export / import
+
+    private var selectedRecipeDTOs: [RecipeDTO] {
+        recipes.filter { selection.contains($0.id) }.map(RecipeDTO.init)
+    }
+
+    private func handleImport(_ result: Result<URL, Error>) {
+        do {
+            let url = try result.get()
+            guard url.startAccessingSecurityScopedResource() else {
+                importMessage = "Impossible d'accéder au fichier."
+                return
+            }
+            defer { url.stopAccessingSecurityScopedResource() }
+            let data = try Data(contentsOf: url)
+            let summary = try RecipeImporter.importData(data, into: modelContext)
+            importMessage = "\(summary.imported) recette(s) importée(s), \(summary.skipped) ignorée(s) (déjà présentes)."
+        } catch {
+            importMessage = "Échec de l'import : \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Filtrage
 
     /// Ingrédients réellement utilisés par au moins une recette.
     private var usedIngredients: [Ingredient] {
