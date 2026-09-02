@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var showingAddSheet = false
     @State private var searchText = ""
     @State private var selectedIngredients: Set<String> = []
+    @State private var selectedRecipeID: PersistentIdentifier?
 
     @State private var isSelecting = false
     @State private var selection: Set<PersistentIdentifier> = []
@@ -16,52 +17,112 @@ struct ContentView: View {
     @State private var importMessage: String?
 
     var body: some View {
-        NavigationStack {
-            List(selection: $selection) {
-                if !usedIngredients.isEmpty {
-                    Section {
-                        ingredientFilterChips
-                            .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
-                            .listRowBackground(Color.clear)
-                    }
-                }
-
-                Section {
-                    ForEach(filteredRecipes) { recipe in
-                        NavigationLink(value: recipe) {
-                            RecipeRowView(recipe: recipe)
-                        }
-                    }
-                }
-            }
-            .environment(\.editMode, .constant(isSelecting ? .active : .inactive))
-            .navigationDestination(for: Recipe.self) { recipe in
+        NavigationSplitView {
+            sidebarList
+                .navigationTitle("Recettes")
+                .searchable(text: $searchText, prompt: "Rechercher une recette")
+                .toolbar { toolbarContent }
+                .overlay { emptyState }
+        } detail: {
+            if let recipe = recipes.first(where: { $0.id == selectedRecipeID }) {
                 RecipeDetailView(recipe: recipe)
-            }
-            .navigationTitle("Recettes")
-            .searchable(text: $searchText, prompt: "Rechercher une recette")
-            .toolbar { toolbarContent }
-            .sheet(isPresented: $showingAddSheet) {
-                RecipeFormView()
-            }
-            .fileImporter(
-                isPresented: $showingImporter,
-                allowedContentTypes: [.json]
-            ) { result in
-                handleImport(result)
-            }
-            .alert(
-                "Import",
-                isPresented: Binding(
-                    get: { importMessage != nil },
-                    set: { if !$0 { importMessage = nil } }
+                    .id(recipe.id)
+            } else {
+                ContentUnavailableView(
+                    "Sélectionnez une recette",
+                    systemImage: "book",
+                    description: Text("Choisissez une recette dans la liste pour l'afficher.")
                 )
-            ) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(importMessage ?? "")
             }
         }
+        .sheet(isPresented: $showingAddSheet) {
+            RecipeFormView()
+        }
+        .fileImporter(
+            isPresented: $showingImporter,
+            allowedContentTypes: [.json]
+        ) { result in
+            handleImport(result)
+        }
+        .alert(
+            "Import",
+            isPresented: Binding(
+                get: { importMessage != nil },
+                set: { if !$0 { importMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(importMessage ?? "")
+        }
+    }
+
+    // MARK: - Liste
+
+    @ViewBuilder
+    private var sidebarList: some View {
+        if isSelecting {
+            List(selection: $selection) { listSections }
+                .environment(\.editMode, .constant(.active))
+        } else {
+            List(selection: $selectedRecipeID) { listSections }
+        }
+    }
+
+    @ViewBuilder
+    private var listSections: some View {
+        if !usedIngredients.isEmpty {
+            Section {
+                ingredientFilterChips
+                    .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                    .listRowBackground(Color.clear)
+            }
+        }
+
+        Section {
+            ForEach(filteredRecipes) { recipe in
+                RecipeRowView(recipe: recipe)
+                    .tag(recipe.id)
+            }
+            .onDelete(perform: deleteRecipes)
+        }
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if recipes.isEmpty {
+            ContentUnavailableView {
+                Label("Aucune recette", systemImage: "book")
+            } description: {
+                Text("Ajoutez une recette de vos livres de cuisine ou une recette complète.")
+            } actions: {
+                Button("Ajouter une recette") {
+                    showingAddSheet = true
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        } else if filteredRecipes.isEmpty {
+            if searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+                ContentUnavailableView(
+                    "Aucun résultat",
+                    systemImage: "line.3.horizontal.decrease.circle",
+                    description: Text("Aucune recette ne contient tous les ingrédients sélectionnés.")
+                )
+            } else {
+                ContentUnavailableView.search(text: searchText)
+            }
+        }
+    }
+
+    private func deleteRecipes(at offsets: IndexSet) {
+        for index in offsets {
+            let recipe = filteredRecipes[index]
+            if recipe.id == selectedRecipeID {
+                selectedRecipeID = nil
+            }
+            modelContext.delete(recipe)
+        }
+        modelContext.cleanupOrphans()
     }
 
     // MARK: - Toolbar

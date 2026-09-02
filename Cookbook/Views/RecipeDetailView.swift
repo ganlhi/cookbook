@@ -2,7 +2,13 @@ import SwiftUI
 import SwiftData
 
 struct RecipeDetailView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+
     let recipe: Recipe
+
+    @State private var showingEditSheet = false
+    @State private var showingDeleteConfirmation = false
 
     var body: some View {
         ScrollView {
@@ -24,6 +30,37 @@ struct RecipeDetailView: View {
         }
         .navigationTitle(recipe.title)
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showingEditSheet = true
+                } label: {
+                    Label("Modifier", systemImage: "pencil")
+                }
+            }
+            ToolbarItem(placement: .secondaryAction) {
+                Button(role: .destructive) {
+                    showingDeleteConfirmation = true
+                } label: {
+                    Label("Supprimer", systemImage: "trash")
+                }
+            }
+        }
+        .sheet(isPresented: $showingEditSheet) {
+            RecipeFormView(recipe: recipe)
+        }
+        .confirmationDialog(
+            "Supprimer « \(recipe.title) » ?",
+            isPresented: $showingDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Supprimer", role: .destructive) {
+                dismiss()
+                modelContext.delete(recipe)
+                modelContext.cleanupOrphans()
+            }
+            Button("Annuler", role: .cancel) {}
+        }
     }
 
     private var ingredientsSection: some View {

@@ -25,4 +25,19 @@ extension ModelContext {
         insert(book)
         return book
     }
+
+    /// Supprime les ingrédients et livres qui ne sont plus référencés par aucune recette.
+    func cleanupOrphans() {
+        try? save()
+        if let ingredients = try? fetch(FetchDescriptor<Ingredient>()) {
+            for ingredient in ingredients where ingredient.recipes.isEmpty {
+                delete(ingredient)
+            }
+        }
+        if let books = try? fetch(FetchDescriptor<Book>()) {
+            for book in books where book.recipes.isEmpty {
+                delete(book)
+            }
+        }
+    }
 }

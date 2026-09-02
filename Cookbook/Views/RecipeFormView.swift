@@ -5,6 +5,13 @@ struct RecipeFormView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
+    /// Recette à modifier ; nil pour une création.
+    let recipeToEdit: Recipe?
+
+    init(recipe: Recipe? = nil) {
+        recipeToEdit = recipe
+    }
+
     enum FormKind: String, CaseIterable, Identifiable {
         case bookReference
         case fullRecipe
@@ -29,6 +36,7 @@ struct RecipeFormView: View {
     @State private var bookTitle = ""
     @State private var pageText = ""
     @State private var instructionsMarkdown = ""
+    @State private var didLoad = false
 
     var body: some View {
         NavigationStack {
@@ -90,7 +98,7 @@ struct RecipeFormView: View {
                     }
                 }
             }
-            .navigationTitle("Nouvelle recette")
+            .navigationTitle(recipeToEdit == nil ? "Nouvelle recette" : "Modifier la recette")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -101,6 +109,22 @@ struct RecipeFormView: View {
                         .disabled(!isValid)
                 }
             }
+            .onAppear(perform: loadRecipe)
+        }
+    }
+
+    private func loadRecipe() {
+        guard !didLoad, let recipe = recipeToEdit else { return }
+        didLoad = true
+        title = recipe.title
+        ingredientNames = recipe.ingredients.map(\.name).sorted()
+        if let book = recipe.book {
+            kind = .bookReference
+            bookTitle = book.title
+            pageText = recipe.page.map(String.init) ?? ""
+        } else {
+            kind = .fullRecipe
+            instructionsMarkdown = recipe.instructionsMarkdown ?? ""
         }
     }
 
@@ -152,19 +176,25 @@ struct RecipeFormView: View {
         // Un ingrédient encore dans le champ de saisie ne doit pas être perdu.
         addIngredient()
 
-        let ingredients = ingredientNames.map { modelContext.ingredient(named: $0) }
-        let recipe = Recipe(
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            ingredients: ingredients
-        )
+        let recipe = recipeToEdit ?? Recipe(title: "")
+        recipe.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        recipe.ingredients = ingredientNames.map { modelContext.ingredient(named: $0) }
+
         switch kind {
         case .bookReference:
             recipe.book = modelContext.book(titled: bookTitle)
             recipe.page = Int(pageText.trimmingCharacters(in: .whitespaces))
+            recipe.instructionsMarkdown = nil
         case .fullRecipe:
+            recipe.book = nil
+            recipe.page = nil
             recipe.instructionsMarkdown = instructionsMarkdown
         }
-        modelContext.insert(recipe)
+
+        if recipeToEdit == nil {
+            modelContext.insert(recipe)
+        }
+        modelContext.cleanupOrphans()
         dismiss()
     }
 }
