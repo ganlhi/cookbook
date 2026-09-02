@@ -1,6 +1,8 @@
 # Objectif
 
-Créer une application iOS pour téléphone ou tablette, permettant d'indexer des recettes de cuisines se trouvant dans des livres ou d'insérer directement les recettes dans l'application.
+Créer une application pour téléphone ou tablette (PWA installable, cible principale iPhone/iPad), permettant d'indexer des recettes de cuisines se trouvant dans des livres ou d'insérer directement les recettes dans l'application.
+
+> Note : une première implémentation en app iOS native (SwiftUI + SwiftData) est archivée sur la branche `ios-app`. Elle a été abandonnée pour éviter le compte développeur Apple payant ; la PWA offre les mêmes fonctionnalités sans distribution App Store.
 
 Deux types d'ajouts possible : 
 - une recette avec un titre, une liste des ingrédients principaux, un titre de livre et une page
@@ -20,58 +22,38 @@ Consultation des recettes :
 
 ## Stack technique
 
-- **SwiftUI** pour l'interface (iPhone + iPad, adaptatif via `NavigationSplitView`)
-- **SwiftData** pour la persistance locale (iOS 17+, pas de dépendance externe)
-- **Swift 5.9+ / Xcode 15+**, aucune bibliothèque tierce : rendu Markdown via `AttributedString(markdown:)` étendu, ou implémentation légère maison pour les titres/listes
-- Export/import via `Transferable` + `ShareLink` / `fileImporter`
+- **PWA statique, vanilla JS (modules ES), sans build ni dépendance** — déployable telle quelle (GitHub Pages ou n'importe quel hébergeur statique, HTTPS requis pour l'installation)
+- **IndexedDB** pour la persistance locale (les données restent sur l'appareil)
+- **Service worker** pour le fonctionnement hors-ligne, **manifest** pour l'installation sur l'écran d'accueil (iOS : « Ajouter à l'écran d'accueil »)
+- Rendu Markdown et fuzzy search implémentés à la main (mêmes algorithmes que la version iOS archivée)
 
-## Modèle de données (SwiftData)
+## Modèle de données
 
-```swift
-@Model class Recipe {
-    var title: String
-    var createdAt: Date
-    var ingredients: [Ingredient]      // many-to-many
-    // Référence livre (mutuellement exclusif avec instructions, validé à la saisie)
-    var book: Book?
-    var page: Int?
-    // Recette complète
-    var instructionsMarkdown: String?
-}
+Un seul type `Recipe`, stocké dans un store IndexedDB unique ; livres et ingrédients sont **dérivés** des recettes (pas de stores séparés, la déduplication par nom est calculée) :
 
-@Model class Ingredient {
-    @Attribute(.unique) var name: String   // normalisé (minuscules, trim)
-    var recipes: [Recipe]
-}
-
-@Model class Book {
-    @Attribute(.unique) var title: String
-    var recipes: [Recipe]
+```js
+{
+  id,                    // généré
+  title,
+  createdAt,             // ISO 8601
+  ingredients: ["..."],  // noms normalisés (minuscules, trim)
+  book,  page,           // référence livre (exclusif avec instructions)
+  instructionsMarkdown,  // recette complète
 }
 ```
 
-Un seul type `Recipe` avec champs optionnels plutôt que deux entités : simplifie la liste, la recherche et l'export. Une propriété calculée `kind` (`.bookReference` / `.fullRecipe`) distingue les deux cas à l'affichage.
+## Écrans (SPA à deux volets)
 
-## Écrans
+1. **Liste des recettes** — recherche fuzzy sur le titre (sous-séquence avec score, insensible accents/casse), filtres multi-ingrédients (chips, intersection), badge livre/recette complète
+2. **Détail** — chips d'ingrédients, carte livre + page, ou instructions Markdown rendues (titres, listes, gras/italique) ; boutons modifier/supprimer
+3. **Ajout / édition** — dialog avec choix du type, saisie des ingrédients en tags avec suggestions, auto-complétion des titres de livres
+4. **Export / import** — export JSON de tout ou d'une sélection (téléchargement + Web Share si dispo) ; import avec déduplication des recettes identiques et récapitulatif
 
-1. **Liste des recettes** (écran principal)
-   - Barre de recherche : fuzzy search sur le titre (algorithme de subsequence matching avec score, en mémoire — volume faible, pas besoin d'index)
-   - Filtres par ingrédients : sélection multiple (chips), intersection des recettes
-   - Badge visuel distinguant référence livre / recette complète
-2. **Détail d'une recette**
-   - Référence livre : titre, ingrédients, livre + page
-   - Recette complète : titre, ingrédients, instructions Markdown rendues (styles titres, listes, gras/italique)
-3. **Ajout / édition**
-   - Choix du type au départ (segmented control)
-   - Auto-complétion des livres : suggestions filtrées sur les `Book` existants au fil de la frappe
-   - Auto-complétion des ingrédients : idem sur les `Ingredient` existants, saisie sous forme de tags
-4. **Export / import**
-   - Export : sélection multiple dans la liste (ou « tout »), génération d'un fichier JSON (`.cookbook`), partage via `ShareLink`
-   - Import : `fileImporter`, fusion par déduplication (ingrédients et livres par nom, recettes par titre + contenu — proposer « ignorer / dupliquer » en cas de conflit)
+Responsive : une colonne sur téléphone (liste ⇄ détail), deux volets côte à côte sur tablette/desktop. Thème clair/sombre via `prefers-color-scheme`.
 
 ## Format d'export
 
-JSON versionné, autoporteur (pas d'IDs SwiftData) :
+Identique à la version iOS archivée (interopérable), fichier `recettes.cookbook.json` :
 
 ```json
 {
@@ -83,14 +65,14 @@ JSON versionné, autoporteur (pas d'IDs SwiftData) :
 }
 ```
 
-Les livres et ingrédients sont reconstruits à l'import à partir des noms — pas besoin de les sérialiser séparément.
+## Structure des fichiers
 
-## Étapes d'implémentation
-
-1. Projet Xcode SwiftUI + SwiftData, modèles et container
-2. Liste des recettes + ajout basique (les deux types, sans auto-complétion)
-3. Auto-complétion livres et ingrédients (tags)
-4. Détail avec rendu Markdown
-5. Fuzzy search + filtres par ingrédients
-6. Export / import JSON avec déduplication
-7. Polissage iPad (`NavigationSplitView`), édition/suppression, états vides
+```
+index.html            # shell de l'app
+style.css             # styles (clair/sombre, responsive)
+logic.js              # fonctions pures : fuzzy search, markdown, dédup import (testées via node)
+app.js                # DOM, état, IndexedDB, export/import
+sw.js                 # service worker (cache offline)
+manifest.webmanifest  # installation PWA
+icons/                # icônes PNG (192, 512, apple-touch-icon 180)
+```
