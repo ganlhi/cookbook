@@ -19,6 +19,9 @@ struct RecipeFormView: View {
         }
     }
 
+    @Query(sort: \Ingredient.name) private var allIngredients: [Ingredient]
+    @Query(sort: \Book.title) private var allBooks: [Book]
+
     @State private var kind: FormKind = .bookReference
     @State private var title = ""
     @State private var ingredientNames: [String] = []
@@ -58,12 +61,24 @@ struct RecipeFormView: View {
                         }
                         .disabled(ingredientInput.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
+
+                    if !ingredientSuggestions.isEmpty {
+                        SuggestionChipsView(suggestions: ingredientSuggestions) { name in
+                            ingredientNames.append(name)
+                            ingredientInput = ""
+                        }
+                    }
                 }
 
                 switch kind {
                 case .bookReference:
                     Section("Livre") {
                         TextField("Titre du livre", text: $bookTitle)
+                        if !bookSuggestions.isEmpty {
+                            SuggestionChipsView(suggestions: bookSuggestions) { title in
+                                bookTitle = title
+                            }
+                        }
                         TextField("Page", text: $pageText)
                             .keyboardType(.numberPad)
                     }
@@ -87,6 +102,30 @@ struct RecipeFormView: View {
                 }
             }
         }
+    }
+
+    private var ingredientSuggestions: [String] {
+        let input = Ingredient.normalized(ingredientInput)
+        return allIngredients
+            .map(\.name)
+            .filter { name in
+                !ingredientNames.contains(name)
+                    && (input.isEmpty || name.localizedStandardContains(input))
+                    && name != input
+            }
+            .prefix(8)
+            .map { $0 }
+    }
+
+    private var bookSuggestions: [String] {
+        let input = bookTitle.trimmingCharacters(in: .whitespaces)
+        return allBooks
+            .map(\.title)
+            .filter { title in
+                (input.isEmpty || title.localizedStandardContains(input)) && title != input
+            }
+            .prefix(8)
+            .map { $0 }
     }
 
     private var isValid: Bool {
