@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Recettes</title>
+  <meta name="description" content="Index de recettes de cuisine, 100 % local.">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#faf7f2">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1c1917">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Recettes">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="sidebar">
+      <header class="topbar">
+        <h1>Recettes</h1>
+        <div class="topbar-actions" id="normal-actions">
+          <button id="add-btn" class="icon-btn" title="Ajouter une recette" aria-label="Ajouter une recette">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+          <details class="menu" id="menu">
+            <summary class="icon-btn" title="Plus d'actions" aria-label="Plus d'actions">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></svg>
+            </summary>
+            <div class="menu-items">
+              <button id="export-all-btn">Tout exporter</button>
+              <button id="select-btn">Sélectionner…</button>
+              <button id="import-btn">Importer…</button>
+            </div>
+          </details>
+        </div>
+        <div class="topbar-actions" id="selecting-actions" hidden>
+          <button id="export-selection-btn" class="text-btn" disabled>Exporter (0)</button>
+          <button id="done-btn" class="text-btn">Terminé</button>
+        </div>
+      </header>
+
+      <div class="searchbar">
+        <input type="search" id="search" placeholder="Rechercher une recette"
+               autocomplete="off" autocapitalize="none" aria-label="Rechercher une recette">
+      </div>
+
+      <div class="chips filter-chips" id="filter-chips"></div>
+
+      <ul class="recipe-list" id="recipe-list"></ul>
+
+      <div class="empty" id="empty-state" hidden></div>
+    </aside>
+
+    <main class="detail" id="detail-pane">
+      <div id="detail-content"></div>
+    </main>
+  </div>
+
+  <dialog id="form-dialog">
+    <form id="recipe-form" novalidate>
+      <h2 id="form-title">Nouvelle recette</h2>
+
+      <div class="segmented" role="radiogroup" aria-label="Type de recette">
+        <label><input type="radio" name="kind" value="book" checked><span>Référence livre</span></label>
+        <label><input type="radio" name="kind" value="full"><span>Recette complète</span></label>
+      </div>
+
+      <label class="field">
+        <span class="field-label">Titre</span>
+        <input id="f-title" type="text" autocomplete="off">
+      </label>
+
+      <div class="field">
+        <span class="field-label">Ingrédients principaux</span>
+        <div class="tags" id="f-ingredient-tags"></div>
+        <input id="f-ingredient-input" type="text" placeholder="Ajouter un ingrédient (Entrée pour valider)"
+               autocapitalize="none" autocomplete="off">
+        <div class="chips suggestions" id="f-ingredient-suggestions"></div>
+      </div>
+
+      <div id="f-book-section">
+        <label class="field">
+          <span class="field-label">Titre du livre</span>
+          <input id="f-book" type="text" autocomplete="off">
+        </label>
+        <div class="chips suggestions" id="f-book-suggestions"></div>
+        <label class="field">
+          <span class="field-label">Page</span>
+          <input id="f-page" type="number" min="1" inputmode="numeric">
+        </label>
+      </div>
+
+      <div id="f-md-section" hidden>
+        <label class="field">
+          <span class="field-label">Instructions (Markdown)</span>
+          <textarea id="f-markdown" rows="10" spellcheck="false"></textarea>
+        </label>
+      </div>
+
+      <footer class="form-actions">
+        <button type="button" id="f-cancel">Annuler</button>
+        <button type="submit" id="f-save" class="primary" disabled>Enregistrer</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <input type="file" id="file-input" accept=".json,application/json" hidden>
+  <div id="toast" class="toast" hidden></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
