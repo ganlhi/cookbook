@@ -1,0 +1,136 @@
+import SwiftUI
+import SwiftData
+
+struct RecipeFormView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+
+    enum FormKind: String, CaseIterable, Identifiable {
+        case bookReference
+        case fullRecipe
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .bookReference: "Référence livre"
+            case .fullRecipe: "Recette complète"
+            }
+        }
+    }
+
+    @State private var kind: FormKind = .bookReference
+    @State private var title = ""
+    @State private var ingredientNames: [String] = []
+    @State private var ingredientInput = ""
+    @State private var bookTitle = ""
+    @State private var pageText = ""
+    @State private var instructionsMarkdown = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Picker("Type", selection: $kind) {
+                    ForEach(FormKind.allCases) { kind in
+                        Text(kind.label).tag(kind)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Color.clear)
+
+                Section("Titre") {
+                    TextField("Titre de la recette", text: $title)
+                }
+
+                Section("Ingrédients principaux") {
+                    ForEach(ingredientNames, id: \.self) { name in
+                        Text(name)
+                    }
+                    .onDelete { ingredientNames.remove(atOffsets: $0) }
+
+                    HStack {
+                        TextField("Ajouter un ingrédient", text: $ingredientInput)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .onSubmit(addIngredient)
+                        Button(action: addIngredient) {
+                            Image(systemName: "plus.circle.fill")
+                        }
+                        .disabled(ingredientInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+
+                switch kind {
+                case .bookReference:
+                    Section("Livre") {
+                        TextField("Titre du livre", text: $bookTitle)
+                        TextField("Page", text: $pageText)
+                            .keyboardType(.numberPad)
+                    }
+                case .fullRecipe:
+                    Section("Instructions (Markdown)") {
+                        TextEditor(text: $instructionsMarkdown)
+                            .frame(minHeight: 180)
+                            .autocorrectionDisabled()
+                    }
+                }
+            }
+            .navigationTitle("Nouvelle recette")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Annuler") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Enregistrer", action: save)
+                        .disabled(!isValid)
+                }
+            }
+        }
+    }
+
+    private var isValid: Bool {
+        let hasTitle = !title.trimmingCharacters(in: .whitespaces).isEmpty
+        switch kind {
+        case .bookReference:
+            return hasTitle && !bookTitle.trimmingCharacters(in: .whitespaces).isEmpty
+        case .fullRecipe:
+            return hasTitle && !instructionsMarkdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    private func addIngredient() {
+        let name = Ingredient.normalized(ingredientInput)
+        guard !name.isEmpty, !ingredientNames.contains(name) else {
+            ingredientInput = ""
+            return
+        }
+        ingredientNames.append(name)
+        ingredientInput = ""
+    }
+
+    private func save() {
+        // Un ingrédient encore dans le champ de saisie ne doit pas être perdu.
+        addIngredient()
+
+        let ingredients = ingredientNames.map { modelContext.ingredient(named: $0) }
+        let recipe = Recipe(
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            ingredients: ingredients
+        )
+        switch kind {
+        case .bookReference:
+            recipe.book = modelContext.book(titled: bookTitle)
+            recipe.page = Int(pageText.trimmingCharacters(in: .whitespaces))
+        case .fullRecipe:
+            recipe.instructionsMarkdown = instructionsMarkdown
+        }
+        modelContext.insert(recipe)
+        dismiss()
+    }
+}
+
+#Preview {
+    RecipeFormView()
+        .modelContainer(for: [Recipe.self, Ingredient.self, Book.self], inMemory: true)
+}

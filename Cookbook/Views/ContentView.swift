@@ -3,13 +3,26 @@ import SwiftData
 
 struct ContentView: View {
     @Query(sort: \Recipe.createdAt, order: .reverse) private var recipes: [Recipe]
+    @State private var showingAddSheet = false
 
     var body: some View {
         NavigationStack {
             List(recipes) { recipe in
-                Text(recipe.title)
+                RecipeRowView(recipe: recipe)
             }
             .navigationTitle("Recettes")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showingAddSheet = true
+                    } label: {
+                        Label("Ajouter", systemImage: "plus")
+                    }
+                }
+            }
+            .sheet(isPresented: $showingAddSheet) {
+                RecipeFormView()
+            }
         }
     }
 }
