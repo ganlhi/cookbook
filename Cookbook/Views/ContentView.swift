@@ -8,7 +8,12 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             List(recipes) { recipe in
-                RecipeRowView(recipe: recipe)
+                NavigationLink(value: recipe) {
+                    RecipeRowView(recipe: recipe)
+                }
+            }
+            .navigationDestination(for: Recipe.self) { recipe in
+                RecipeDetailView(recipe: recipe)
             }
             .navigationTitle("Recettes")
             .toolbar {
