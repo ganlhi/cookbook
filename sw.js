@@ -1,6 +1,6 @@
 // Service worker : précache du shell + stale-while-revalidate.
 // Incrémenter CACHE_NAME à chaque déploiement pour forcer la mise à jour.
-const CACHE_NAME = 'cookbook-v1';
+const CACHE_NAME = 'cookbook-v2';
 const ASSETS = [
   './',
   './index.html',

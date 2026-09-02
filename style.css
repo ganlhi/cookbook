@@ -31,6 +31,9 @@
 
 * { box-sizing: border-box; }
 
+/* L'attribut hidden doit gagner sur les display de classes (flex, grid…) */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   height: 100%;
@@ -64,12 +67,14 @@ button {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0; /* autorise la sidebar à être plus étroite que son contenu (chips, lignes) */
   padding: env(safe-area-inset-top) 0 0 env(safe-area-inset-left);
 }
 
 .detail {
   display: none;
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) 0;
 }
@@ -247,7 +252,7 @@ button {
   border-color: var(--accent);
 }
 
-.recipe-row .row-body { min-width: 0; }
+.recipe-row .row-body { display: block; flex: 1; min-width: 0; }
 
 .recipe-row .row-title {
   display: flex;
