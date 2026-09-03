@@ -91,6 +91,7 @@ const el = {
   fTitle: $('f-title'),
   fIngredientTags: $('f-ingredient-tags'),
   fIngredientInput: $('f-ingredient-input'),
+  fIngredientAdd: $('f-ingredient-add'),
   fIngredientSuggestions: $('f-ingredient-suggestions'),
   fBookSection: $('f-book-section'),
   fBook: $('f-book'),
@@ -366,6 +367,7 @@ function renderForm() {
 
 function renderFormSuggestions() {
   const input = normalizeIngredient(el.fIngredientInput.value);
+  el.fIngredientAdd.disabled = !input || formIngredients.includes(input);
   const ingredientSuggestions = allIngredients()
     .filter((name) => !formIngredients.includes(name)
       && (!input || name.includes(input))
@@ -399,6 +401,12 @@ function renderSuggestionChips(container, suggestions, onSelect) {
     chip.onclick = () => onSelect(suggestion);
     container.append(chip);
   }
+}
+
+function addIngredientFromInput() {
+  commitIngredientInput();
+  renderForm();
+  el.fIngredientInput.focus();
 }
 
 function commitIngredientInput() {
@@ -559,9 +567,16 @@ el.fIngredientInput.addEventListener('input', renderFormSuggestions);
 el.fIngredientInput.addEventListener('keydown', (event) => {
   if (event.key === 'Enter' || event.key === ',') {
     event.preventDefault();
-    commitIngredientInput();
-    renderForm();
-    el.fIngredientInput.focus();
+    addIngredientFromInput();
+  }
+});
+el.fIngredientAdd.addEventListener('click', addIngredientFromInput);
+// Certains claviers virtuels (Android/GBoard) n'émettent pas de keydown « Enter »
+// exploitable : on intercepte aussi le saut de ligne au niveau de beforeinput.
+el.fIngredientInput.addEventListener('beforeinput', (event) => {
+  if (event.inputType === 'insertLineBreak') {
+    event.preventDefault();
+    addIngredientFromInput();
   }
 });
 

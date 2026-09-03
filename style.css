@@ -456,6 +456,28 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 
 .field textarea { resize: vertical; min-height: 140px; }
 
+.tag-input-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.tag-input-row input { flex: 1; min-width: 0; }
+
+.tag-add {
+  flex: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.tag-add:disabled { opacity: 0.4; cursor: default; }
+
 .tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .tags:empty { display: none; }
 

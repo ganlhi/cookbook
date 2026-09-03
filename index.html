@@ -76,8 +76,11 @@
       <div class="field">
         <span class="field-label">Ingrédients principaux</span>
         <div class="tags" id="f-ingredient-tags"></div>
-        <input id="f-ingredient-input" type="text" placeholder="Ajouter un ingrédient (Entrée pour valider)"
-               autocapitalize="none" autocomplete="off">
+        <div class="tag-input-row">
+          <input id="f-ingredient-input" type="text" placeholder="Ajouter un ingrédient"
+                 autocapitalize="none" autocomplete="off" enterkeyhint="done">
+          <button type="button" id="f-ingredient-add" class="tag-add" aria-label="Ajouter l’ingrédient" disabled>Ajouter</button>
+        </div>
         <div class="chips suggestions" id="f-ingredient-suggestions"></div>
       </div>
 
