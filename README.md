@@ -29,7 +29,9 @@ node --test
 
 N'importe quel hébergeur statique en HTTPS. Avec GitHub Pages : Settings → Pages → Deploy from branch → `main`, dossier `/ (root)`.
 
-Après chaque modification déployée, incrémenter `CACHE_NAME` dans [sw.js](sw.js) pour que les clients installés se mettent à jour.
+Après chaque modification déployée, incrémenter `CACHE_NAME` dans [sw.js](sw.js). Le service worker
+sert le réseau en priorité (cache en repli hors-ligne) et l'app se recharge d'elle-même quand une
+nouvelle version prend la main, donc un appareil connecté se met à jour au lancement suivant.
 
 ## Installation sur iPhone / iPad
 

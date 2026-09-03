@@ -1,6 +1,7 @@
-// Service worker : précache du shell + stale-while-revalidate.
-// Incrémenter CACHE_NAME à chaque déploiement pour forcer la mise à jour.
-const CACHE_NAME = 'cookbook-v3';
+// Service worker : précache du shell pour le hors-ligne, mais réseau d'abord
+// quand la connexion est là — sinon un appareil installé reste bloqué sur
+// l'ancienne version. Incrémenter CACHE_NAME à chaque déploiement.
+const CACHE_NAME = 'cookbook-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -15,7 +16,11 @@ const ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME)
+      // `reload` contourne le cache HTTP : sans ça l'hébergeur peut resservir
+      // les anciens fichiers au moment même où l'on précache la nouvelle version.
+      .then((cache) => cache.addAll(ASSETS.map((url) => new Request(url, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -33,14 +38,17 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(
     caches.open(CACHE_NAME).then(async (cache) => {
-      const cached = await cache.match(request);
-      const network = fetch(request)
-        .then((response) => {
-          if (response.ok) cache.put(request, response.clone());
-          return response;
-        })
-        .catch(() => cached);
-      return cached ?? network;
+      try {
+        const response = await fetch(request);
+        if (response.ok) cache.put(request, response.clone());
+        return response;
+      } catch (error) {
+        // Hors-ligne : on sert le cache, et le shell pour toute navigation.
+        const cached = await cache.match(request)
+          ?? (request.mode === 'navigate' ? await cache.match('./index.html') : undefined);
+        if (cached) return cached;
+        throw error;
+      }
     })
   );
 });

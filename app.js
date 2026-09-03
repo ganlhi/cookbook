@@ -597,7 +597,26 @@ async function start() {
   navigator.storage?.persist?.().catch(() => {});
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    // Si un service worker contrôlait déjà la page, l'arrivée d'un nouveau
+    // signifie qu'une version plus récente est prête : on recharge pour
+    // l'appliquer tout de suite au lieu d'attendre un prochain lancement.
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || reloading) return;
+      reloading = true;
+      location.reload();
+    });
+
+    navigator.serviceWorker.register('./sw.js')
+      .then((registration) => {
+        registration.update().catch(() => {});
+        // L'app installée reste ouverte longtemps : on revérifie au retour au premier plan.
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden) registration.update().catch(() => {});
+        });
+      })
+      .catch(() => {});
   }
 }
 
