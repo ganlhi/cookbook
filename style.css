@@ -56,52 +56,29 @@ button {
   padding: 0;
 }
 
-/* ---------- Structure deux volets ---------- */
+/* ---------- Coquille (une seule colonne, pensée portrait) ---------- */
 .app {
-  /* Coquille fixée au viewport : donne une hauteur définie sans dépendre de
-     `dvh` ni de la chaîne de hauteurs des ancêtres. Sans hauteur définie, les
-     volets ne peuvent pas défiler eux-mêmes. */
+  /* Fixée au viewport : hauteur définie sans dépendre de `dvh` ni de la chaîne
+     de hauteurs des ancêtres — sans quoi la liste ne peut pas défiler seule. */
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
   left: 0;
-  display: grid;
-  grid-template-columns: 1fr;
-  /* Une ligne implicite `auto` se dimensionnerait sur son contenu, ce qui
-     faisait défiler la page entière au lieu des deux volets. */
-  grid-template-rows: minmax(0, 1fr);
-  overflow: hidden;
-}
-
-.sidebar {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  min-width: 0; /* autorise la sidebar à être plus étroite que son contenu (chips, lignes) */
-  padding: env(safe-area-inset-top) 0 0 env(safe-area-inset-left);
+  overflow: hidden;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
 }
 
-.detail {
-  display: none;
-  min-height: 0;
-  min-width: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) 0;
-}
-
-/* Téléphone : bascule liste ⇄ détail */
-@media (max-width: 767px) {
-  .app.show-detail .sidebar { display: none; }
-  .app.show-detail .detail { display: block; padding-left: env(safe-area-inset-left); }
-}
-
-/* Tablette / desktop : deux volets */
-@media (min-width: 768px) {
-  .app { grid-template-columns: minmax(320px, 380px) 1fr; }
-  .sidebar { border-right: 1px solid var(--border); }
-  .detail { display: block; }
+/* Au-delà du portrait téléphone, on centre la colonne plutôt que de l'étirer.
+   Avec left/right à 0, `margin-inline: auto` centre la boîte positionnée. */
+@media (min-width: 700px) {
+  .app {
+    width: min(100%, 640px);
+    margin-inline: auto;
+    border-inline: 1px solid var(--border);
+  }
 }
 
 /* ---------- Barre du haut ---------- */
@@ -234,17 +211,43 @@ button {
   min-height: 0;
 }
 
+.recipe-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .recipe-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   text-align: left;
   padding: 10px 8px;
   border-radius: 12px;
 }
 
-.recipe-row:active, .recipe-row.active { background: var(--accent-soft); }
+/* Une référence livre tient entière dans la ligne : rien à ouvrir, donc pas
+   d'affordance de clic. Seules les recettes à contenu sont des boutons. */
+.recipe-row.static { cursor: default; }
+.recipe-row:not(.static):active { background: var(--accent-soft); }
+.recipe-row.checked { background: var(--accent-soft); }
+
+.row-menu-btn {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: var(--text-tertiary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.row-menu-btn svg { width: 18px; height: 18px; }
+.row-menu-btn:active { background: var(--chip-bg); }
+.selecting .row-menu-btn { display: none; }
 
 .recipe-row .checkbox {
   flex: none;
@@ -319,66 +322,80 @@ button {
 
 .primary:disabled { opacity: 0.4; }
 
-/* ---------- Détail ---------- */
-.detail-inner {
-  max-width: 680px;
-  padding: 12px 20px 40px;
-}
-
-.detail-toolbar {
+/* ---------- Popup de recette (contenu Markdown) ---------- */
+.sheet[open] {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 0;
+  flex-direction: column;
 }
 
-.back-btn {
-  display: none;
-  align-items: center;
-  gap: 2px;
-  color: var(--accent);
-  font-weight: 600;
-}
-.back-btn svg { width: 22px; height: 22px; }
-
-@media (max-width: 767px) {
-  .back-btn { display: inline-flex; }
-}
-
-.detail-actions { display: flex; gap: 6px; margin-left: auto; }
-
-.detail-title {
-  font-size: 1.8rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  margin: 6px 0 18px;
-}
-
-.detail-section-label {
-  font-size: 0.88rem;
-  font-weight: 650;
-  color: var(--text-secondary);
-  margin: 0 0 8px;
-}
-
-.detail .chips.wrap { flex-wrap: wrap; overflow: visible; margin-bottom: 22px; }
-
-.book-card {
+.sheet-header {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  background: var(--accent-soft);
-  border-radius: 14px;
-  padding: 14px 16px;
-  margin-bottom: 22px;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 16px 12px 10px 20px;
+  border-bottom: 1px solid var(--border);
 }
 
-.book-card svg { width: 26px; height: 26px; color: var(--accent); flex: none; }
-.book-card .book-title { font-weight: 650; }
-.book-card .book-page { color: var(--text-secondary); font-size: 0.92rem; }
+.sheet-header h2 {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 1.3rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.sheet-header .icon-btn { flex: none; width: 34px; height: 34px; }
+.sheet-header .icon-btn svg { width: 18px; height: 18px; }
+
+.sheet-body {
+  padding: 14px 20px 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex: 1;
+  min-height: 0;
+}
+
+.sheet-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+}
+
+.sheet-body .chips.wrap {
+  flex-wrap: wrap;
+  overflow: visible;
+  margin-bottom: 18px;
+}
 
 .danger { color: var(--danger); }
+
+/* ---------- Menu « ⋯ » d'une ligne ---------- */
+.row-menu {
+  position: fixed;
+  inset: auto;
+  width: auto;
+  min-width: 180px;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.row-menu::backdrop { background: transparent; }
+
+.row-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 13px 18px;
+}
+
+.row-menu button:not(:last-child) { border-bottom: 1px solid var(--border); }
+.row-menu button:active { background: var(--accent-soft); }
 
 /* ---------- Markdown ---------- */
 .markdown { line-height: 1.55; }
@@ -400,6 +417,7 @@ button {
 /* ---------- Formulaire (dialog) ---------- */
 dialog {
   width: min(560px, calc(100vw - 24px));
+  max-height: calc(100vh - 40px);
   max-height: calc(100dvh - 40px);
   border: none;
   border-radius: 16px;
@@ -417,6 +435,7 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
   gap: 14px;
   padding: 20px;
   overflow-y: auto;
+  max-height: calc(100vh - 40px);
   max-height: calc(100dvh - 40px);
 }
 

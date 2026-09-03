@@ -1,7 +1,7 @@
 // Service worker : précache du shell pour le hors-ligne, mais réseau d'abord
 // quand la connexion est là — sinon un appareil installé reste bloqué sur
 // l'ancienne version. Incrémenter CACHE_NAME à chaque déploiement.
-const CACHE_NAME = 'cookbook-v6';
+const CACHE_NAME = 'cookbook-v7';
 const ASSETS = [
   './',
   './index.html',

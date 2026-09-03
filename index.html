@@ -18,46 +18,62 @@
 </head>
 <body>
   <div class="app" id="app">
-    <aside class="sidebar">
-      <header class="topbar">
-        <h1>Recettes</h1>
-        <div class="topbar-actions" id="normal-actions">
-          <button id="add-btn" class="icon-btn" title="Ajouter une recette" aria-label="Ajouter une recette">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          </button>
-          <details class="menu" id="menu">
-            <summary class="icon-btn" title="Plus d'actions" aria-label="Plus d'actions">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></svg>
-            </summary>
-            <div class="menu-items">
-              <button id="export-all-btn">Tout exporter</button>
-              <button id="select-btn">Sélectionner…</button>
-              <button id="import-btn">Importer…</button>
-            </div>
-          </details>
-        </div>
-        <div class="topbar-actions" id="selecting-actions" hidden>
-          <button id="export-selection-btn" class="text-btn" disabled>Exporter (0)</button>
-          <button id="done-btn" class="text-btn">Terminé</button>
-        </div>
-      </header>
-
-      <div class="searchbar">
-        <input type="search" id="search" placeholder="Rechercher une recette"
-               autocomplete="off" autocapitalize="none" aria-label="Rechercher une recette">
+    <header class="topbar">
+      <h1>Recettes</h1>
+      <div class="topbar-actions" id="normal-actions">
+        <button id="add-btn" class="icon-btn" title="Ajouter une recette" aria-label="Ajouter une recette">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <details class="menu" id="menu">
+          <summary class="icon-btn" title="Plus d'actions" aria-label="Plus d'actions">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></svg>
+          </summary>
+          <div class="menu-items">
+            <button id="export-all-btn">Tout exporter</button>
+            <button id="select-btn">Sélectionner…</button>
+            <button id="import-btn">Importer…</button>
+          </div>
+        </details>
       </div>
+      <div class="topbar-actions" id="selecting-actions" hidden>
+        <button id="export-selection-btn" class="text-btn" disabled>Exporter (0)</button>
+        <button id="done-btn" class="text-btn">Terminé</button>
+      </div>
+    </header>
 
-      <div class="chips filter-chips" id="filter-chips"></div>
+    <div class="searchbar">
+      <input type="search" id="search" placeholder="Rechercher une recette"
+             autocomplete="off" autocapitalize="none" aria-label="Rechercher une recette">
+    </div>
 
-      <ul class="recipe-list" id="recipe-list"></ul>
+    <div class="chips filter-chips" id="filter-chips"></div>
 
-      <div class="empty" id="empty-state" hidden></div>
-    </aside>
+    <ul class="recipe-list" id="recipe-list"></ul>
 
-    <main class="detail" id="detail-pane">
-      <div id="detail-content"></div>
-    </main>
+    <div class="empty" id="empty-state" hidden></div>
   </div>
+
+  <!-- Contenu d'une recette complète (les références livre tiennent dans la liste) -->
+  <dialog id="recipe-dialog" class="sheet">
+    <header class="sheet-header">
+      <h2 id="recipe-dialog-title"></h2>
+      <button type="button" id="recipe-dialog-close" class="icon-btn" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </header>
+    <div class="sheet-body" id="recipe-dialog-body"></div>
+    <footer class="sheet-actions">
+      <button type="button" class="text-btn" id="recipe-dialog-edit">Modifier</button>
+      <button type="button" class="text-btn danger" id="recipe-dialog-delete">Supprimer</button>
+    </footer>
+  </dialog>
+
+  <!-- Menu « ⋯ » d'une ligne : dialog modal (top layer) positionné sur le bouton,
+       pour ne pas être rogné par le défilement de la liste. -->
+  <dialog id="row-menu" class="row-menu">
+    <button type="button" id="row-menu-edit">Modifier</button>
+    <button type="button" id="row-menu-delete" class="danger">Supprimer</button>
+  </dialog>
 
   <dialog id="form-dialog">
     <form id="recipe-form" novalidate>

@@ -42,14 +42,16 @@ Un seul type `Recipe`, stocké dans un store IndexedDB unique ; livres et ingré
 }
 ```
 
-## Écrans (SPA à deux volets)
+## Écrans (SPA centrée sur la liste)
 
-1. **Liste des recettes** — recherche fuzzy sur le titre (sous-séquence avec score, insensible accents/casse), filtres multi-ingrédients (chips, intersection), badge livre/recette complète
-2. **Détail** — chips d'ingrédients, carte livre + page, ou instructions Markdown rendues (titres, listes, gras/italique) ; boutons modifier/supprimer
+L'usage principal est la consultation de la liste : la plupart des recettes sont de simples références à des livres, et une ligne suffit à les afficher en entier. Il n'y a donc pas de volet détail.
+
+1. **Liste des recettes** (écran unique) — recherche fuzzy sur le titre (sous-séquence avec score, insensible accents/casse), filtres multi-ingrédients (chips, intersection). Chaque ligne porte le titre, le livre + page, les ingrédients, et un bouton « ⋯ » ouvrant modifier / supprimer
+2. **Popup de recette** — uniquement pour les recettes à contenu : un clic sur la ligne affiche les instructions Markdown rendues (titres, listes, gras/italique) et les chips d'ingrédients. Les références livre ne sont pas cliquables, tout est déjà dans la ligne
 3. **Ajout / édition** — dialog avec choix du type, saisie des ingrédients en tags avec suggestions, auto-complétion des titres de livres
 4. **Export / import** — export JSON de tout ou d'une sélection (téléchargement + Web Share si dispo) ; import avec déduplication des recettes identiques et récapitulatif
 
-Responsive : une colonne sur téléphone (liste ⇄ détail), deux volets côte à côte sur tablette/desktop. Thème clair/sombre via `prefers-color-scheme`.
+Mise en page pensée pour le portrait : une seule colonne, centrée et bornée en largeur au-delà de 700 px. La coquille `.app` est `position: fixed` sur le viewport (pas de `dvh`, dont l'absence de support cassait le défilement) et seule la liste défile. Thème clair/sombre via `prefers-color-scheme`.
 
 ## Format d'export
 

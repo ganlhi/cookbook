@@ -67,7 +67,7 @@ const state = {
   recipes: [],
   searchText: '',
   selectedIngredients: new Set(),
-  selectedId: null,     // recette affichée en détail
+  openId: null,         // recette affichée en popup (recettes à contenu uniquement)
   selecting: false,     // mode sélection multiple (export)
   selection: new Set(),
 };
@@ -75,12 +75,14 @@ const state = {
 const $ = (id) => document.getElementById(id);
 const el = {
   app: $('app'),
-  sidebar: document.querySelector('.sidebar'),
   search: $('search'),
   filterChips: $('filter-chips'),
   list: $('recipe-list'),
   emptyState: $('empty-state'),
-  detailContent: $('detail-content'),
+  recipeDialog: $('recipe-dialog'),
+  recipeDialogTitle: $('recipe-dialog-title'),
+  recipeDialogBody: $('recipe-dialog-body'),
+  rowMenu: $('row-menu'),
   normalActions: $('normal-actions'),
   selectingActions: $('selecting-actions'),
   exportSelectionBtn: $('export-selection-btn'),
@@ -107,7 +109,7 @@ const el = {
 const ICONS = {
   book: '<svg class="kind-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-2.5"/></svg>',
   list: '<svg class="kind-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg>',
-  back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 19l-7-7 7-7"/></svg>',
+  more: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></svg>',
 };
 
 // ---------------------------------------------------------------------------
@@ -142,8 +144,13 @@ function filteredRecipes() {
     .map(([recipe]) => recipe);
 }
 
-function selectedRecipe() {
-  return state.recipes.find((recipe) => recipe.id === state.selectedId) ?? null;
+function recipeById(id) {
+  return state.recipes.find((recipe) => recipe.id === id) ?? null;
+}
+
+/** Une recette « complète » a des instructions ; une référence livre n'en a pas. */
+function hasContent(recipe) {
+  return recipe.instructionsMarkdown != null;
 }
 
 // ---------------------------------------------------------------------------
@@ -155,13 +162,13 @@ function render() {
   renderFilterChips();
   renderList();
   renderEmptyState();
-  renderDetail();
+  renderRecipeDialog();
 }
 
 function renderTopbar() {
   el.normalActions.hidden = state.selecting;
   el.selectingActions.hidden = !state.selecting;
-  el.sidebar.classList.toggle('selecting', state.selecting);
+  el.app.classList.toggle('selecting', state.selecting);
   el.exportSelectionBtn.textContent = `Exporter (${state.selection.size})`;
   el.exportSelectionBtn.disabled = state.selection.size === 0;
 }
@@ -186,13 +193,18 @@ function renderList() {
   el.list.innerHTML = '';
   for (const recipe of filteredRecipes()) {
     const li = document.createElement('li');
-    const row = document.createElement('button');
-    row.className = 'recipe-row';
-    if (recipe.id === state.selectedId && !state.selecting) row.classList.add('active');
+    li.className = 'recipe-item';
+
+    // Cliquable seulement s'il y a quelque chose à ouvrir : une référence livre
+    // affiche déjà tout dans la ligne.
+    const actionable = state.selecting || hasContent(recipe);
+    const row = document.createElement(actionable ? 'button' : 'div');
+    if (actionable) row.type = 'button';
+    row.className = 'recipe-row' + (actionable ? '' : ' static');
     if (state.selection.has(recipe.id)) row.classList.add('checked');
 
     const sub = recipe.book
-      ? `<div class="row-sub">${escapeHtml(recipe.book)}${recipe.page != null ? `, p. ${recipe.page}` : ''}</div>`
+      ? `<div class="row-sub">${escapeHtml(recipe.book)}${recipe.page != null ? `, p. ${recipe.page}` : ''}</div>`
       : '';
     const ingredients = recipe.ingredients.length
       ? `<div class="row-ingredients">${escapeHtml([...recipe.ingredients].sort().join(' · '))}</div>`
@@ -205,19 +217,74 @@ function renderList() {
         ${sub}${ingredients}
       </span>`;
 
-    row.onclick = () => {
-      if (state.selecting) {
-        state.selection.has(recipe.id) ? state.selection.delete(recipe.id) : state.selection.add(recipe.id);
-        render();
-      } else {
-        state.selectedId = recipe.id;
-        render();
-      }
-    };
-
+    if (actionable) {
+      row.onclick = () => {
+        if (state.selecting) {
+          state.selection.has(recipe.id) ? state.selection.delete(recipe.id) : state.selection.add(recipe.id);
+          render();
+        } else {
+          state.openId = recipe.id;
+          render();
+        }
+      };
+    }
     li.append(row);
+
+    const menuBtn = document.createElement('button');
+    menuBtn.type = 'button';
+    menuBtn.className = 'row-menu-btn';
+    menuBtn.title = 'Actions';
+    menuBtn.setAttribute('aria-label', `Actions pour ${recipe.title}`);
+    menuBtn.innerHTML = ICONS.more;
+    menuBtn.onclick = () => openRowMenu(menuBtn, recipe);
+    li.append(menuBtn);
+
     el.list.append(li);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Menu « ⋯ » d'une ligne
+// ---------------------------------------------------------------------------
+
+/**
+ * Ouvre le menu en modal (top layer) puis le positionne sur le bouton : le
+ * top layer échappe au défilement de la liste, donc rien n'est rogné.
+ */
+function openRowMenu(anchor, recipe) {
+  const menu = el.rowMenu;
+  if (menu.open) menu.close();
+  menu.showModal();
+
+  const button = anchor.getBoundingClientRect();
+  const box = menu.getBoundingClientRect();
+  const margin = 8;
+  const left = Math.min(button.right - box.width, window.innerWidth - box.width - margin);
+  const below = button.bottom + 6;
+  const top = below + box.height + margin > window.innerHeight
+    ? button.top - box.height - 6
+    : below;
+  menu.style.left = `${Math.max(margin, left)}px`;
+  menu.style.top = `${Math.max(margin, top)}px`;
+
+  $('row-menu-edit').onclick = () => {
+    menu.close();
+    openForm(recipe);
+  };
+  $('row-menu-delete').onclick = () => {
+    menu.close();
+    deleteRecipe(recipe);
+  };
+}
+
+async function deleteRecipe(recipe) {
+  if (!window.confirm(`Supprimer « ${recipe.title} » ?`)) return;
+  await dbDelete(recipe.id);
+  state.recipes = state.recipes.filter((r) => r.id !== recipe.id);
+  state.selection.delete(recipe.id);
+  if (state.openId === recipe.id) state.openId = null;
+  pruneIngredientFilters();
+  render();
 }
 
 function renderEmptyState() {
@@ -245,66 +312,36 @@ function renderEmptyState() {
   el.list.hidden = !el.emptyState.hidden;
 }
 
-function renderDetail() {
-  const recipe = selectedRecipe();
-  el.app.classList.toggle('show-detail', !!recipe && !state.selecting);
+function renderRecipeDialog() {
+  const recipe = state.openId != null ? recipeById(state.openId) : null;
 
-  if (!recipe) {
-    el.detailContent.innerHTML = `
-      <div class="empty" style="height:100%">
-        <div class="empty-icon">🍲</div>
-        <h2>Sélectionnez une recette</h2>
-        <p>Choisissez une recette dans la liste pour l'afficher.</p>
-      </div>`;
+  if (!recipe || !hasContent(recipe) || state.selecting) {
+    state.openId = null;
+    if (el.recipeDialog.open) el.recipeDialog.close();
     return;
   }
 
+  el.recipeDialogTitle.textContent = recipe.title;
+
   const chips = recipe.ingredients.length
-    ? `<p class="detail-section-label">Ingrédients principaux</p>
-       <div class="chips wrap">${[...recipe.ingredients].sort()
-         .map((name) => `<span class="chip">${escapeHtml(name)}</span>`).join('')}</div>`
+    ? `<div class="chips wrap">${[...recipe.ingredients].sort()
+        .map((name) => `<span class="chip">${escapeHtml(name)}</span>`).join('')}</div>`
     : '';
 
-  const book = recipe.book
-    ? `<div class="book-card">
-         ${ICONS.book}
-         <div>
-           <div class="book-title">${escapeHtml(recipe.book)}</div>
-           ${recipe.page != null ? `<div class="book-page">Page ${recipe.page}</div>` : ''}
-         </div>
-       </div>`
-    : '';
+  el.recipeDialogBody.innerHTML =
+    `${chips}<div class="markdown">${renderMarkdown(recipe.instructionsMarkdown)}</div>`;
+  el.recipeDialogBody.scrollTop = 0;
 
-  const markdown = recipe.instructionsMarkdown != null
-    ? `<div class="markdown">${renderMarkdown(recipe.instructionsMarkdown)}</div>`
-    : '';
-
-  el.detailContent.innerHTML = `
-    <div class="detail-inner">
-      <div class="detail-toolbar">
-        <button class="back-btn" id="back-btn">${ICONS.back}Recettes</button>
-        <div class="detail-actions">
-          <button class="text-btn" id="edit-btn">Modifier</button>
-          <button class="text-btn danger" id="delete-btn">Supprimer</button>
-        </div>
-      </div>
-      <h1 class="detail-title">${escapeHtml(recipe.title)}</h1>
-      ${chips}${book}${markdown}
-    </div>`;
-
-  $('back-btn').onclick = () => {
-    state.selectedId = null;
-    render();
+  $('recipe-dialog-edit').onclick = () => {
+    el.recipeDialog.close();
+    openForm(recipe);
   };
-  $('edit-btn').onclick = () => openForm(recipe);
-  $('delete-btn').onclick = async () => {
-    if (!window.confirm(`Supprimer « ${recipe.title} » ?`)) return;
-    await dbDelete(recipe.id);
-    state.recipes = state.recipes.filter((r) => r.id !== recipe.id);
-    state.selectedId = null;
-    pruneIngredientFilters();
-    render();
+  $('recipe-dialog-delete').onclick = () => {
+    el.recipeDialog.close();
+    deleteRecipe(recipe);
   };
+
+  if (!el.recipeDialog.open) el.recipeDialog.showModal();
 }
 
 /** Retire des filtres les ingrédients qui n'existent plus. */
@@ -524,7 +561,7 @@ $('select-btn').addEventListener('click', () => {
   el.menu.open = false;
   state.selecting = true;
   state.selection = new Set();
-  state.selectedId = null;
+  state.openId = null;
   render();
 });
 
@@ -552,6 +589,20 @@ el.fileInput.addEventListener('change', () => {
 // Ferme le menu quand on clique ailleurs
 document.addEventListener('click', (event) => {
   if (el.menu.open && !el.menu.contains(event.target)) el.menu.open = false;
+});
+
+// Popup de recette
+$('recipe-dialog-close').addEventListener('click', () => el.recipeDialog.close());
+el.recipeDialog.addEventListener('close', () => {
+  state.openId = null;
+  renderList();
+});
+el.recipeDialog.addEventListener('click', (event) => {
+  // Le backdrop n'est pas un enfant : un clic dessus cible le dialog lui-même.
+  if (event.target === el.recipeDialog) el.recipeDialog.close();
+});
+el.rowMenu.addEventListener('click', (event) => {
+  if (event.target === el.rowMenu) el.rowMenu.close();
 });
 
 // Formulaire
