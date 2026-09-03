@@ -45,7 +45,6 @@ body {
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
-  overflow: hidden;
 }
 
 button {
@@ -59,12 +58,18 @@ button {
 
 /* ---------- Structure deux volets ---------- */
 .app {
-  height: 100dvh;
+  /* Coquille fixée au viewport : donne une hauteur définie sans dépendre de
+     `dvh` ni de la chaîne de hauteurs des ancêtres. Sans hauteur définie, les
+     volets ne peuvent pas défiler eux-mêmes. */
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   display: grid;
   grid-template-columns: 1fr;
-  /* La ligne doit rester à la hauteur du viewport : une ligne implicite `auto`
-     se dimensionne sur son contenu, ce qui faisait déborder et scroller la page
-     entière au lieu des deux volets. */
+  /* Une ligne implicite `auto` se dimensionnerait sur son contenu, ce qui
+     faisait défiler la page entière au lieu des deux volets. */
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
 }
