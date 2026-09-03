@@ -71,16 +71,6 @@ button {
   padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
 }
 
-/* Au-delà du portrait téléphone, on centre la colonne plutôt que de l'étirer.
-   Avec left/right à 0, `margin-inline: auto` centre la boîte positionnée. */
-@media (min-width: 700px) {
-  .app {
-    width: min(100%, 640px);
-    margin-inline: auto;
-    border-inline: 1px solid var(--border);
-  }
-}
-
 /* ---------- Barre du haut ---------- */
 .topbar {
   display: flex;

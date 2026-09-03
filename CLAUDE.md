@@ -51,7 +51,7 @@ L'usage principal est la consultation de la liste : la plupart des recettes sont
 3. **Ajout / édition** — dialog avec choix du type, saisie des ingrédients en tags avec suggestions, auto-complétion des titres de livres
 4. **Export / import** — export JSON de tout ou d'une sélection (téléchargement + Web Share si dispo) ; import avec déduplication des recettes identiques et récapitulatif
 
-Mise en page pensée pour le portrait : une seule colonne, centrée et bornée en largeur au-delà de 700 px. La coquille `.app` est `position: fixed` sur le viewport (pas de `dvh`, dont l'absence de support cassait le défilement) et seule la liste défile. Thème clair/sombre via `prefers-color-scheme`.
+Mise en page pensée pour le portrait : une seule colonne occupant toute la largeur du viewport. La coquille `.app` est `position: fixed` sur le viewport (pas de `dvh`, dont l'absence de support cassait le défilement) et seule la liste défile. Thème clair/sombre via `prefers-color-scheme`.
 
 ## Format d'export
 
