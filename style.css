@@ -419,7 +419,8 @@ dialog {
 
 dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 
-#recipe-form {
+#recipe-form,
+.panel {
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -429,7 +430,8 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
   max-height: calc(100dvh - 40px);
 }
 
-#recipe-form h2 { margin: 0; font-size: 1.25rem; }
+#recipe-form h2,
+.panel h2 { margin: 0; font-size: 1.25rem; }
 
 .segmented {
   display: grid;
@@ -533,6 +535,43 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 
 .form-actions button { padding: 10px 18px; border-radius: 999px; font-weight: 600; }
 #f-cancel { color: var(--text-secondary); }
+
+/* ---------- Synchronisation (dialog) ---------- */
+.sync-status {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+}
+
+.sync-status:empty { display: none; }
+
+.hint {
+  margin: -6px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--text-tertiary);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.95rem;
+}
+
+.check input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+
+/* Rejeté à gauche, à distance des actions positives. */
+#sync-disconnect { margin-right: auto; }
+#sync-close { color: var(--text-secondary); }
 
 /* ---------- Toast ---------- */
 .toast {

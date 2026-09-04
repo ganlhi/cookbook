@@ -14,6 +14,8 @@ Tout est local, pas de base de données externe à l'application.
 
 Possibilité d'exporter tout où partie des recettes sous la forme d'un fichier unique partageable pour pouvoir l'importer dans l'application sur un autre appareil.
 
+Synchronisation optionnelle entre appareils via Google Drive (fichier unique dans le Drive de l'utilisateur, aucun serveur applicatif) ; les paramètres restent stockés localement.
+
 Consultation des recettes : 
 - liste filtrable par ingrédients, par partie du titre (fuzzy search)
 - affichage des instructions pour les recettes qui en disposent dans un format agréable à lire (rendu du contenu Markdown).
@@ -29,18 +31,25 @@ Consultation des recettes :
 
 ## Modèle de données
 
-Un seul type `Recipe`, stocké dans un store IndexedDB unique ; livres et ingrédients sont **dérivés** des recettes (pas de stores séparés, la déduplication par nom est calculée) :
+Un seul type `Recipe` ; livres et ingrédients sont **dérivés** des recettes (pas de stores séparés, la déduplication par nom est calculée) :
 
 ```js
 {
   id,                    // généré
   title,
   createdAt,             // ISO 8601
+  updatedAt,             // ISO 8601, base du « dernier écrit gagnant » à la synchro
   ingredients: ["..."],  // noms normalisés (minuscules, trim)
   book,  page,           // référence livre (exclusif avec instructions)
   instructionsMarkdown,  // recette complète
 }
 ```
+
+Trois stores IndexedDB (base `cookbook`, version 2) :
+
+- `recipes` — les recettes ci-dessus
+- `tombstones` — `{ id, deletedAt }` : les suppressions doivent voyager jusqu'aux autres appareils, sans quoi une recette effacée ici réapparaîtrait de là-bas. Oubliées au bout de 90 jours
+- `settings` — paramètres locaux, dont ceux de la synchronisation (un enregistrement `sync`)
 
 ## Écrans (SPA centrée sur la liste)
 
@@ -50,6 +59,7 @@ L'usage principal est la consultation de la liste : la plupart des recettes sont
 2. **Popup de recette** — uniquement pour les recettes à contenu : un clic sur la ligne affiche les instructions Markdown rendues (titres, listes, gras/italique) et les chips d'ingrédients. Les références livre ne sont pas cliquables, tout est déjà dans la ligne
 3. **Ajout / édition** — dialog avec choix du type, saisie des ingrédients en tags avec suggestions, auto-complétion des titres de livres
 4. **Export / import** — export JSON de tout ou d'une sélection (téléchargement + Web Share si dispo) ; import avec déduplication des recettes identiques et récapitulatif
+5. **Synchronisation** — dialog : ID client OAuth, compte connecté, date de dernière synchro, bascule auto, boutons synchroniser / déconnecter
 
 Mise en page pensée pour le portrait : une seule colonne occupant toute la largeur du viewport. La coquille `.app` est `position: fixed` sur le viewport (pas de `dvh`, dont l'absence de support cassait le défilement) et seule la liste défile. Thème clair/sombre via `prefers-color-scheme`.
 
@@ -67,13 +77,35 @@ Identique à la version iOS archivée (interopérable), fichier `recettes.cookbo
 }
 ```
 
+## Synchronisation Google Drive
+
+Facultative, activée en collant un ID client OAuth (propre au déploiement, créé dans la
+console Google Cloud — procédure dans le README) dans le dialog de synchronisation.
+
+- **Autorisation** : flux implicite OAuth 2.0 **par redirection plein écran**, construit à la
+  main. Pas de bibliothèque externe, et surtout pas de popup — celles-ci sont peu fiables dans
+  une PWA installée sur iOS. Sans backend il n'y a pas de jeton de rafraîchissement : le jeton
+  dure une heure et son renouvellement passe par un geste de l'utilisateur.
+- **Scope `drive.file`** : l'app ne voit que le fichier qu'elle a créé. Scope non sensible,
+  donc pas de procédure de vérification chez Google.
+- **Fichier** : un seul `recettes.cookbook.json` dans le Drive, au format v2 — sur-ensemble du
+  format d'export v1, avec l'identité et les dates de chaque recette plus les suppressions.
+  L'export manuel reste en v1 pour rester interopérable avec l'app iOS archivée.
+- **Fusion** (`mergeSync` dans `logic.js`, fonction pure et testée) : union par id, dernier
+  écrit gagnant, pierres tombales pour les suppressions, déduplication par contenu pour les
+  recettes importées séparément sur deux appareils. Commutative et idempotente — deux
+  appareils convergent quel que soit l'ordre des synchronisations.
+- **Déclenchement** : au lancement, au retour au premier plan, quelques secondes après une
+  modification locale, et à la demande. Jamais de redirection sans geste utilisateur.
+
 ## Structure des fichiers
 
 ```
 index.html            # shell de l'app
 style.css             # styles (clair/sombre, responsive)
-logic.js              # fonctions pures : fuzzy search, markdown, dédup import (testées via node)
-app.js                # DOM, état, IndexedDB, export/import
+logic.js              # fonctions pures : fuzzy search, markdown, dédup import, fusion (testées via node)
+app.js                # DOM, état, IndexedDB, export/import, orchestration de la synchro
+gdrive.js             # OAuth Google et appels REST Drive
 sw.js                 # service worker (cache offline)
 manifest.webmanifest  # installation PWA
 icons/                # icônes PNG (192, 512, apple-touch-icon 180)

@@ -32,6 +32,7 @@
             <button id="export-all-btn">Tout exporter</button>
             <button id="select-btn">Sélectionner…</button>
             <button id="import-btn">Importer…</button>
+            <button id="sync-btn">Synchronisation…</button>
           </div>
         </details>
       </div>
@@ -124,6 +125,38 @@
         <button type="submit" id="f-save" class="primary" disabled>Enregistrer</button>
       </footer>
     </form>
+  </dialog>
+
+  <dialog id="sync-dialog">
+    <div class="panel">
+      <h2>Synchronisation Google Drive</h2>
+      <p class="sync-status" id="sync-status"></p>
+
+      <label class="field">
+        <span class="field-label">ID client OAuth</span>
+        <input id="sync-client-id" type="text" autocomplete="off" autocapitalize="none"
+               autocorrect="off" spellcheck="false" placeholder="…apps.googleusercontent.com">
+      </label>
+      <p class="hint">
+        À créer une fois dans la console Google Cloud (procédure dans le README).
+        Ce n’est pas un secret, et il reste stocké sur cet appareil.
+      </p>
+
+      <label class="check">
+        <input type="checkbox" id="sync-auto">
+        <span>Synchroniser automatiquement</span>
+      </label>
+      <p class="hint">
+        Les recettes sont fusionnées entre appareils : ajouts, modifications et suppressions.
+        L’autorisation Google dure une heure, après quoi il faut toucher « Synchroniser ».
+      </p>
+
+      <footer class="form-actions">
+        <button type="button" id="sync-disconnect" class="text-btn danger" hidden>Déconnecter</button>
+        <button type="button" id="sync-close">Fermer</button>
+        <button type="button" id="sync-now" class="primary">Synchroniser</button>
+      </footer>
+    </div>
   </dialog>
 
   <input type="file" id="file-input" accept=".json,application/json" hidden>

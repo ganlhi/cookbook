@@ -5,8 +5,12 @@ import {
   escapeHtml,
   exportDocument,
   planImport,
+  mergeSync,
+  syncDocument,
+  parseSyncDocument,
   EXPORT_FILENAME,
 } from './logic.js';
+import * as gdrive from './gdrive.js';
 
 // ---------------------------------------------------------------------------
 // Persistance (IndexedDB)
@@ -14,12 +18,31 @@ import {
 
 const DB_NAME = 'cookbook';
 const STORE = 'recipes';
+const TOMBSTONES = 'tombstones';   // ids supprimés, pour propager les suppressions
+const SETTINGS = 'settings';       // paramètres locaux (dont la synchronisation)
 let dbPromise = null;
 
 function openDB() {
   dbPromise ??= new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = () => request.result.createObjectStore(STORE, { keyPath: 'id' });
+    const request = indexedDB.open(DB_NAME, 2);
+    request.onupgradeneeded = (event) => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(TOMBSTONES)) db.createObjectStore(TOMBSTONES, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(SETTINGS)) db.createObjectStore(SETTINGS, { keyPath: 'key' });
+
+      // v1 → v2 : les recettes existantes n'ont pas de date de modification.
+      if (event.oldVersion >= 1) {
+        request.transaction.objectStore(STORE).openCursor().onsuccess = (cursorEvent) => {
+          const cursor = cursorEvent.target.result;
+          if (!cursor) return;
+          if (cursor.value.updatedAt == null) {
+            cursor.update({ ...cursor.value, updatedAt: cursor.value.createdAt });
+          }
+          cursor.continue();
+        };
+      }
+    };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
@@ -59,6 +82,43 @@ async function dbDelete(id) {
   return asPromise(db.transaction(STORE, 'readwrite').objectStore(STORE).delete(id));
 }
 
+async function dbGetTombstones() {
+  const db = await openDB();
+  return asPromise(db.transaction(TOMBSTONES).objectStore(TOMBSTONES).getAll());
+}
+
+async function dbPutTombstone(tombstone) {
+  const db = await openDB();
+  return asPromise(db.transaction(TOMBSTONES, 'readwrite').objectStore(TOMBSTONES).put(tombstone));
+}
+
+/** Remplace l'état complet en une transaction — utilisé au retour d'une fusion. */
+async function dbReplaceState(recipes, tombstones) {
+  const db = await openDB();
+  const transaction = db.transaction([STORE, TOMBSTONES], 'readwrite');
+  const recipeStore = transaction.objectStore(STORE);
+  const tombstoneStore = transaction.objectStore(TOMBSTONES);
+  recipeStore.clear();
+  recipes.forEach((recipe) => recipeStore.put(recipe));
+  tombstoneStore.clear();
+  tombstones.forEach((tombstone) => tombstoneStore.put(tombstone));
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+async function dbGetSettings(key) {
+  const db = await openDB();
+  const record = await asPromise(db.transaction(SETTINGS).objectStore(SETTINGS).get(key));
+  return record?.value ?? null;
+}
+
+async function dbSetSettings(key, value) {
+  const db = await openDB();
+  return asPromise(db.transaction(SETTINGS, 'readwrite').objectStore(SETTINGS).put({ key, value }));
+}
+
 // ---------------------------------------------------------------------------
 // État
 // ---------------------------------------------------------------------------
@@ -70,6 +130,8 @@ const state = {
   openId: null,         // recette affichée en popup (recettes à contenu uniquement)
   selecting: false,     // mode sélection multiple (export)
   selection: new Set(),
+  syncing: false,
+  syncMessage: null,    // dernier retour de synchronisation, affiché dans son dialog
 };
 
 const $ = (id) => document.getElementById(id);
@@ -104,6 +166,12 @@ const el = {
   fSave: $('f-save'),
   fileInput: $('file-input'),
   toast: $('toast'),
+  syncDialog: $('sync-dialog'),
+  syncStatus: $('sync-status'),
+  syncClientId: $('sync-client-id'),
+  syncAuto: $('sync-auto'),
+  syncNow: $('sync-now'),
+  syncDisconnect: $('sync-disconnect'),
 };
 
 const ICONS = {
@@ -280,11 +348,14 @@ function openRowMenu(anchor, recipe) {
 async function deleteRecipe(recipe) {
   if (!window.confirm(`Supprimer « ${recipe.title} » ?`)) return;
   await dbDelete(recipe.id);
+  // La pierre tombale fait voyager la suppression vers les autres appareils.
+  await dbPutTombstone({ id: recipe.id, deletedAt: new Date().toISOString() });
   state.recipes = state.recipes.filter((r) => r.id !== recipe.id);
   state.selection.delete(recipe.id);
   if (state.openId === recipe.id) state.openId = null;
   pruneIngredientFilters();
   render();
+  scheduleSync();
 }
 
 function renderEmptyState() {
@@ -467,10 +538,9 @@ async function submitForm(event) {
   commitIngredientInput();
 
   const kind = formKind();
-  const recipe = editingRecipe ?? {
-    id: crypto.randomUUID(),
-    createdAt: new Date().toISOString(),
-  };
+  const now = new Date().toISOString();
+  const recipe = editingRecipe ?? { id: crypto.randomUUID(), createdAt: now };
+  recipe.updatedAt = now;
   recipe.title = el.fTitle.value.trim();
   recipe.ingredients = [...formIngredients].sort();
   if (kind === 'book') {
@@ -489,6 +559,7 @@ async function submitForm(event) {
   pruneIngredientFilters();
   el.formDialog.close();
   render();
+  scheduleSync();
 }
 
 // ---------------------------------------------------------------------------
@@ -523,11 +594,14 @@ async function importFile(file) {
     const document = JSON.parse(await file.text());
     const { toAdd, skipped } = planImport(state.recipes, document);
     const now = new Date().toISOString();
-    const newRecipes = toAdd.map((dto) => ({ id: crypto.randomUUID(), createdAt: now, ...dto }));
+    const newRecipes = toAdd.map((dto) => ({
+      id: crypto.randomUUID(), createdAt: now, updatedAt: now, ...dto,
+    }));
     await dbPutAll(newRecipes);
     state.recipes.push(...newRecipes);
     render();
     showToast(`${toAdd.length} recette(s) importée(s), ${skipped} ignorée(s) (déjà présentes).`);
+    scheduleSync();
   } catch (error) {
     showToast(`Échec de l'import : ${error.message}`);
   }
@@ -539,6 +613,199 @@ function showToast(message) {
   el.toast.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { el.toast.hidden = true; }, 4000);
+}
+
+// ---------------------------------------------------------------------------
+// Synchronisation Google Drive
+//
+// Un fichier unique dans le Drive de l'utilisateur porte l'état complet ; à
+// chaque synchronisation on le lit, on le fusionne avec l'état local (dernier
+// écrit gagnant par recette, pierres tombales pour les suppressions) puis on le
+// réécrit s'il a changé. Les paramètres restent sur l'appareil.
+// ---------------------------------------------------------------------------
+
+const SYNC_SETTINGS_KEY = 'sync';
+const AUTO_SYNC_DEBOUNCE_MS = 5000;
+const AUTO_SYNC_THROTTLE_MS = 60_000;
+
+const syncSettings = {
+  clientId: '',
+  autoSync: true,
+  fileId: null,
+  remoteVersion: null,
+  lastSyncAt: null,
+  accountEmail: null,
+};
+
+let syncDebounce = null;
+let lastAutoSyncAt = 0;
+
+async function loadSyncSettings() {
+  Object.assign(syncSettings, (await dbGetSettings(SYNC_SETTINGS_KEY)) ?? {});
+}
+
+async function saveSyncSettings(patch) {
+  Object.assign(syncSettings, patch);
+  await dbSetSettings(SYNC_SETTINGS_KEY, { ...syncSettings });
+}
+
+function syncConfigured() {
+  return Boolean(syncSettings.clientId);
+}
+
+function setSyncMessage(message) {
+  state.syncMessage = message;
+  renderSyncDialog();
+}
+
+/** Sync différée après une modification locale, pour ne pas pousser à chaque frappe. */
+function scheduleSync() {
+  if (!syncConfigured() || !syncSettings.autoSync || !gdrive.hasValidToken()) return;
+  clearTimeout(syncDebounce);
+  syncDebounce = setTimeout(() => runSync(), AUTO_SYNC_DEBOUNCE_MS);
+}
+
+/**
+ * `allowRedirect` autorise le départ vers l'écran d'autorisation Google, qui
+ * quitte la page : réservé à une action explicite de l'utilisateur.
+ */
+async function runSync({ interactive = false, allowRedirect = interactive } = {}) {
+  if (state.syncing) return;
+
+  if (!syncConfigured()) {
+    if (interactive) setSyncMessage('Renseignez l’ID client OAuth pour commencer.');
+    return;
+  }
+  if (!navigator.onLine) {
+    if (interactive) setSyncMessage('Hors ligne : synchronisation impossible.');
+    return;
+  }
+  if (!gdrive.hasValidToken()) {
+    if (!allowRedirect) {
+      setSyncMessage('Autorisation Google expirée — touchez « Synchroniser ».');
+      return;
+    }
+    gdrive.authorize({ clientId: syncSettings.clientId, email: syncSettings.accountEmail });
+    return; // la page part en redirection
+  }
+
+  state.syncing = true;
+  setSyncMessage('Synchronisation…');
+  try {
+    const { added, updated, removed } = await syncOnce();
+    const parts = [];
+    if (added) parts.push(`${added} ajoutée(s)`);
+    if (updated) parts.push(`${updated} mise(s) à jour`);
+    if (removed) parts.push(`${removed} supprimée(s)`);
+    const detail = parts.length ? parts.join(', ') : 'déjà à jour';
+    setSyncMessage(`Synchronisé — ${detail}.`);
+    if (interactive || parts.length) showToast(`Synchronisation : ${detail}.`);
+  } catch (error) {
+    setSyncMessage(`Échec : ${error.message}`);
+    if (interactive) showToast(`Synchronisation : ${error.message}`);
+  } finally {
+    state.syncing = false;
+    renderSyncDialog();
+  }
+}
+
+async function syncOnce() {
+  // Deux tentatives : si un autre appareil écrit entre notre lecture et notre
+  // écriture, on refusionne une fois avant d'abandonner.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let file = await locateSyncFile();
+    const remote = file
+      ? parseSyncDocument(await gdrive.readFile(file.id))
+      : { recipes: [], tombstones: [] };
+    const local = { recipes: state.recipes, tombstones: await dbGetTombstones() };
+    const merged = mergeSync(local, remote);
+
+    if (merged.localChanged) await applyMergedState(merged);
+
+    if (!file) {
+      file = await gdrive.createFile(
+        EXPORT_FILENAME, syncDocument(merged.recipes, merged.tombstones));
+    } else if (merged.remoteChanged) {
+      const fresh = await gdrive.fileMeta(file.id);
+      if (fresh.version !== file.version) continue; // le distant a bougé : on refait un tour
+      file = await gdrive.writeFile(
+        file.id, syncDocument(merged.recipes, merged.tombstones));
+    }
+
+    await saveSyncSettings({
+      fileId: file.id,
+      remoteVersion: file.version ?? null,
+      lastSyncAt: new Date().toISOString(),
+      accountEmail: syncSettings.accountEmail ?? await gdrive.accountEmail(),
+    });
+    return merged.summary;
+  }
+  throw new Error('un autre appareil écrivait au même moment, réessayez');
+}
+
+async function applyMergedState(merged) {
+  await dbReplaceState(merged.recipes, merged.tombstones);
+  state.recipes = merged.recipes;
+  const alive = new Set(merged.recipes.map((recipe) => recipe.id));
+  state.selection = new Set([...state.selection].filter((id) => alive.has(id)));
+  if (state.openId != null && !alive.has(state.openId)) state.openId = null;
+  pruneIngredientFilters();
+  render();
+}
+
+/** Métadonnées du fichier de sync, ou null s'il faut le créer. */
+async function locateSyncFile() {
+  if (syncSettings.fileId) {
+    try {
+      const meta = await gdrive.fileMeta(syncSettings.fileId);
+      if (!meta.trashed) return meta;
+    } catch (error) {
+      if (error.status !== 404) throw error;
+    }
+    // Fichier supprimé ou mis à la corbeille depuis le Drive : on repart de zéro.
+    await saveSyncSettings({ fileId: null, remoteVersion: null });
+  }
+  return gdrive.findFile(EXPORT_FILENAME);
+}
+
+// --- Dialog de synchronisation ---
+
+function openSyncDialog() {
+  el.syncClientId.value = syncSettings.clientId;
+  el.syncAuto.checked = syncSettings.autoSync;
+  el.syncDialog.showModal();
+  renderSyncDialog();
+}
+
+function renderSyncDialog() {
+  if (!el.syncDialog.open) return;
+
+  el.syncNow.disabled = state.syncing || !syncConfigured();
+  el.syncNow.textContent = state.syncing ? 'Synchronisation…' : 'Synchroniser';
+  el.syncDisconnect.hidden = !syncSettings.accountEmail && !gdrive.hasValidToken();
+
+  const lines = [];
+  if (!syncConfigured()) lines.push('Non configuré.');
+  else if (syncSettings.accountEmail) lines.push(`Compte : ${syncSettings.accountEmail}`);
+  if (syncSettings.lastSyncAt) {
+    lines.push(`Dernière synchronisation : ${formatDateTime(syncSettings.lastSyncAt)}`);
+  }
+  if (state.syncMessage) lines.push(state.syncMessage);
+
+  el.syncStatus.innerHTML = lines.map((line) => `<span>${escapeHtml(line)}</span>`).join('');
+}
+
+function formatDateTime(iso) {
+  return new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+async function disconnectSync() {
+  if (!window.confirm('Se déconnecter de Google Drive ? Les recettes de cet appareil sont conservées.')) return;
+  gdrive.clearToken();
+  await saveSyncSettings({
+    fileId: null, remoteVersion: null, lastSyncAt: null, accountEmail: null,
+  });
+  setSyncMessage('Déconnecté.');
 }
 
 // ---------------------------------------------------------------------------
@@ -568,6 +835,11 @@ $('select-btn').addEventListener('click', () => {
 $('import-btn').addEventListener('click', () => {
   el.menu.open = false;
   el.fileInput.click();
+});
+
+$('sync-btn').addEventListener('click', () => {
+  el.menu.open = false;
+  openSyncDialog();
 });
 
 $('done-btn').addEventListener('click', () => {
@@ -605,6 +877,29 @@ el.rowMenu.addEventListener('click', (event) => {
   if (event.target === el.rowMenu) el.rowMenu.close();
 });
 
+// Synchronisation
+el.syncClientId.addEventListener('input', () => {
+  saveSyncSettings({ clientId: el.syncClientId.value.trim() }).then(renderSyncDialog);
+});
+el.syncAuto.addEventListener('change', () => {
+  saveSyncSettings({ autoSync: el.syncAuto.checked });
+});
+el.syncNow.addEventListener('click', () => runSync({ interactive: true }));
+el.syncDisconnect.addEventListener('click', disconnectSync);
+$('sync-close').addEventListener('click', () => el.syncDialog.close());
+el.syncDialog.addEventListener('close', () => { state.syncMessage = null; });
+el.syncDialog.addEventListener('click', (event) => {
+  if (event.target === el.syncDialog) el.syncDialog.close();
+});
+
+// L'app installée reste ouverte longtemps : on retente au retour au premier plan.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden || !syncSettings.autoSync || !gdrive.hasValidToken()) return;
+  if (Date.now() - lastAutoSyncAt < AUTO_SYNC_THROTTLE_MS) return;
+  lastAutoSyncAt = Date.now();
+  runSync();
+});
+
 // Formulaire
 el.form.addEventListener('submit', submitForm);
 $('f-cancel').addEventListener('click', () => el.formDialog.close());
@@ -636,13 +931,28 @@ el.fIngredientInput.addEventListener('beforeinput', (event) => {
 // ---------------------------------------------------------------------------
 
 async function start() {
+  // Avant tout : nettoyer un éventuel retour d'autorisation Google dans l'URL.
+  const redirect = gdrive.consumeRedirect();
+
   try {
     state.recipes = await dbGetAll();
+    await loadSyncSettings();
   } catch (error) {
     showToast(`Impossible d'ouvrir la base locale : ${error.message}`);
     state.recipes = [];
   }
   render();
+
+  if (redirect?.error) {
+    showToast(redirect.error);
+  } else if (redirect) {
+    // On revient de Google avec un jeton frais : `allowRedirect: false` évite
+    // toute boucle de redirection si quelque chose cloche malgré tout.
+    runSync({ interactive: true, allowRedirect: false });
+  } else if (syncSettings.autoSync && gdrive.hasValidToken()) {
+    lastAutoSyncAt = Date.now();
+    runSync();
+  }
 
   // Demande la persistance du stockage (best effort, ignoré si non supporté).
   navigator.storage?.persist?.().catch(() => {});
