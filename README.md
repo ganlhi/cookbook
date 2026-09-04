@@ -52,6 +52,13 @@ Rien ne transite par un serveur tiers — les appels vont du navigateur à l'API
 L'app utilise le scope `drive.file` : elle ne voit **que** le fichier qu'elle a créé, jamais
 le reste de votre Drive.
 
+### Emplacement du fichier
+
+Il est créé à la racine de « Mon Drive », mais vous pouvez le **déplacer** où bon vous semble
+depuis l'interface Drive : l'app le suit par son identifiant, pas par son chemin. En revanche,
+ne le **renommez pas** — un appareil qui ne le connaît pas encore le cherche par son nom, et en
+créerait un second s'il ne le trouvait pas.
+
 ### Configuration (une fois)
 
 L'app n'embarque pas d'identifiant OAuth — il est propre à votre déploiement, et il faut
