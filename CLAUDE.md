@@ -64,6 +64,11 @@ L'usage principal est la consultation de la liste : la plupart des recettes sont
 
 Mise en page pensée pour le portrait : une seule colonne occupant toute la largeur du viewport. La coquille `.app` est `position: fixed` sur le viewport (pas de `dvh`, dont l'absence de support cassait le défilement) et seule la liste défile. Thème clair/sombre via `prefers-color-scheme`.
 
+Deux pièges de mise en page rencontrés sur les `dialog`, à garder en tête :
+
+- les navigateurs leur appliquent `height: fit-content` et `margin: auto`. Pour qu'une feuille remplisse le viewport via `top`/`bottom`, il faut écraser les deux (`height: auto`, `margin: 0 auto`), sinon `bottom` est ignoré et le contenu déborde
+- `flex: 1` sur un enfant vaut `flex-basis: 0%` : dans un conteneur de hauteur automatique, cet enfant ne compte alors pour rien dans la hauteur intrinsèque et se retrouve écrasé. Safari applique la règle, Chrome la rattrape — d'où `flex: 1 1 auto` sur `.sheet-body`
+
 ## Format d'export
 
 Identique à la version iOS archivée (interopérable), fichier `recettes.cookbook.json` :

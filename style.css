@@ -379,11 +379,16 @@ button {
 .sheet-header .icon-btn { flex: none; width: 34px; height: 34px; }
 .sheet-header .icon-btn svg { width: 18px; height: 18px; }
 
+.sheet-header, .sheet-actions { flex: none; }
+
 .sheet-body {
   padding: 14px 20px 20px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  flex: 1;
+  /* `flex: 1` vaut `flex-basis: 0%` : dans un conteneur de hauteur automatique,
+     le corps ne compterait alors pour rien dans la hauteur du dialog et se
+     retrouverait écrasé (Safari applique la règle, Chrome la rattrape). */
+  flex: 1 1 auto;
   min-height: 0;
 }
 
@@ -402,6 +407,28 @@ button {
 }
 
 /* ---------- Feuille de sélection des ingrédients ---------- */
+
+/* La liste peut être longue : la feuille occupe le viewport au lieu de se régler
+   sur son contenu, ce qui donne au corps une hauteur définie à faire défiler.
+   Insets plutôt que `vh`/`dvh`, comme `.app` — ces unités ne sont pas fiables
+   sur iOS. */
+#ingredients-dialog {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top));
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  left: 12px;
+  /* `height`/`width: auto` écrasent le `fit-content` que les navigateurs
+     appliquent aux dialog — sans quoi `bottom` est ignoré. Et marges verticales
+     nulles, sinon le `margin: auto` du dialog absorbe l'espace entre `top` et
+     `bottom` au lieu de laisser la hauteur le remplir. */
+  height: auto;
+  width: auto;
+  max-width: 560px;
+  max-height: none;
+  margin: 0 auto;
+}
+
 #ingredients-dialog .sheet-body { padding: 4px 8px 12px; }
 
 .ingredient-row {
