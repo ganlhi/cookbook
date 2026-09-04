@@ -133,6 +133,7 @@ const state = {
   selection: new Set(),
   syncing: false,
   syncMessage: null,    // dernier retour de synchronisation, affiché dans son dialog
+  hideUnavailable: false, // masquer les ingrédients sans résultat (préférence persistée)
 };
 
 const $ = (id) => document.getElementById(id);
@@ -145,6 +146,9 @@ const el = {
   selectedChips: $('selected-chips'),
   ingredientsDialog: $('ingredients-dialog'),
   ingredientsSearch: $('ingredients-search'),
+  ingredientsHideRow: $('ingredients-hide-row'),
+  ingredientsHide: $('ingredients-hide'),
+  ingredientsHideLabel: $('ingredients-hide-label'),
   ingredientsList: $('ingredients-list'),
   ingredientsClear: $('ingredients-clear'),
   list: $('recipe-list'),
@@ -301,6 +305,18 @@ function ingredientCounts() {
 // bouger les lignes sous le doigt.
 let ingredientOrder = [];
 
+// Préférence d'affichage de la feuille, conservée d'une session à l'autre.
+const UI_SETTINGS_KEY = 'ui';
+
+async function loadUiSettings() {
+  const ui = await dbGetSettings(UI_SETTINGS_KEY);
+  state.hideUnavailable = Boolean(ui?.hideUnavailableIngredients);
+}
+
+function saveUiSettings() {
+  return dbSetSettings(UI_SETTINGS_KEY, { hideUnavailableIngredients: state.hideUnavailable });
+}
+
 function openIngredientsDialog() {
   el.ingredientsSearch.value = '';
   ingredientOrder = allIngredients().sort((a, b) => {
@@ -322,9 +338,22 @@ function renderIngredientsDialog() {
     ...allIngredients().filter((name) => !known.has(name)),
   ];
 
-  const query = searchNormalize(el.ingredientsSearch.value);
-  const names = ingredientOrder.filter((name) => !query || searchNormalize(name).includes(query));
   const counts = ingredientCounts();
+  const unavailable = (name) =>
+    !state.selectedIngredients.has(name) && (counts.get(name) ?? 0) === 0;
+
+  const query = searchNormalize(el.ingredientsSearch.value);
+  const matching = ingredientOrder.filter((name) => !query || searchNormalize(name).includes(query));
+  const names = state.hideUnavailable ? matching.filter((name) => !unavailable(name)) : matching;
+
+  // La bascule se compte sur toute la liste, pas sur la recherche en cours :
+  // elle ne doit pas apparaître et disparaître pendant la frappe.
+  const withoutResult = ingredientOrder.filter(unavailable).length;
+  el.ingredientsHideRow.hidden = withoutResult === 0;
+  el.ingredientsHide.checked = state.hideUnavailable;
+  el.ingredientsHideLabel.textContent = withoutResult === 1
+    ? 'Masquer l’ingrédient sans résultat'
+    : `Masquer les ${withoutResult} ingrédients sans résultat`;
 
   el.ingredientsClear.disabled = state.selectedIngredients.size === 0;
 
@@ -333,8 +362,10 @@ function renderIngredientsDialog() {
   el.ingredientsList.innerHTML = '';
 
   if (names.length === 0) {
-    el.ingredientsList.innerHTML =
-      '<p class="ingredient-empty-state">Aucun ingrédient ne correspond.</p>';
+    const message = matching.length
+      ? 'Tous les ingrédients correspondants sont sans résultat.'
+      : 'Aucun ingrédient ne correspond.';
+    el.ingredientsList.innerHTML = `<p class="ingredient-empty-state">${message}</p>`;
     return;
   }
 
@@ -986,6 +1017,11 @@ el.rowMenu.addEventListener('click', (event) => {
 // Feuille des ingrédients
 el.ingredientsBtn.addEventListener('click', openIngredientsDialog);
 el.ingredientsSearch.addEventListener('input', renderIngredientsDialog);
+el.ingredientsHide.addEventListener('change', () => {
+  state.hideUnavailable = el.ingredientsHide.checked;
+  saveUiSettings();
+  renderIngredientsDialog();
+});
 el.ingredientsClear.addEventListener('click', () => {
   state.selectedIngredients.clear();
   render();
@@ -1056,6 +1092,7 @@ async function start() {
   try {
     state.recipes = await dbGetAll();
     await loadSyncSettings();
+    await loadUiSettings();
   } catch (error) {
     showToast(`Impossible d'ouvrir la base locale : ${error.message}`);
     state.recipes = [];

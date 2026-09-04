@@ -49,14 +49,14 @@ Trois stores IndexedDB (base `cookbook`, version 2) :
 
 - `recipes` — les recettes ci-dessus
 - `tombstones` — `{ id, deletedAt }` : les suppressions doivent voyager jusqu'aux autres appareils, sans quoi une recette effacée ici réapparaîtrait de là-bas. Oubliées au bout de 90 jours
-- `settings` — paramètres locaux, dont ceux de la synchronisation (un enregistrement `sync`)
+- `settings` — paramètres locaux : un enregistrement `sync` (synchronisation) et un enregistrement `ui` (préférences d'affichage)
 
 ## Écrans (SPA centrée sur la liste)
 
 L'usage principal est la consultation de la liste : la plupart des recettes sont de simples références à des livres, et une ligne suffit à les afficher en entier. Il n'y a donc pas de volet détail.
 
 1. **Liste des recettes** (écran unique) — recherche fuzzy sur le titre (sous-séquence avec score, insensible accents/casse), filtres multi-ingrédients (intersection). Chaque ligne porte le titre, le livre + page, les ingrédients, et un bouton « ⋯ » ouvrant modifier / supprimer
-2. **Feuille des ingrédients** — la liste complète ne tient pas dans une rangée de chips dès qu'elle s'allonge : la barre ne garde que le bouton d'ouverture et les ingrédients actifs (retirables d'un tap), le choix se fait dans une feuille avec recherche. Chaque ligne affiche le nombre de recettes qui associent cet ingrédient à ceux déjà cochés — un zéro, grisé, signale une combinaison sans résultat. L'ordre est figé à l'ouverture pour que cocher une case ne déplace pas les lignes
+2. **Feuille des ingrédients** — la liste complète ne tient pas dans une rangée de chips dès qu'elle s'allonge : la barre ne garde que le bouton d'ouverture et les ingrédients actifs (retirables d'un tap), le choix se fait dans une feuille avec recherche. Chaque ligne affiche le nombre de recettes qui associent cet ingrédient à ceux déjà cochés — un zéro, grisé, signale une combinaison sans résultat, et une bascule permet de masquer ces lignes-là (préférence persistée dans le store `settings`, enregistrement `ui`). L'ordre est figé à l'ouverture pour que cocher une case ne déplace pas les lignes
 3. **Popup de recette** — uniquement pour les recettes à contenu : un clic sur la ligne affiche les instructions Markdown rendues (titres, listes, gras/italique) et les chips d'ingrédients. Les références livre ne sont pas cliquables, tout est déjà dans la ligne
 4. **Ajout / édition** — dialog avec choix du type, saisie des ingrédients en tags avec suggestions, auto-complétion des titres de livres
 5. **Export / import** — export JSON de tout ou d'une sélection (téléchargement + Web Share si dispo) ; import avec déduplication des recettes identiques et récapitulatif

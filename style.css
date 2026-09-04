@@ -431,6 +431,14 @@ button {
 
 #ingredients-dialog .sheet-body { padding: 4px 8px 12px; }
 
+.sheet-toggle {
+  flex: none;
+  padding: 4px 20px 8px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
 .ingredient-row {
   display: flex;
   align-items: center;

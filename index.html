@@ -89,6 +89,11 @@
       <input type="search" id="ingredients-search" placeholder="Filtrer les ingrédients"
              autocomplete="off" autocapitalize="none" aria-label="Filtrer les ingrédients">
     </div>
+    <!-- Affichée seulement quand il y a effectivement des lignes sans résultat. -->
+    <label class="check sheet-toggle" id="ingredients-hide-row" hidden>
+      <input type="checkbox" id="ingredients-hide">
+      <span id="ingredients-hide-label"></span>
+    </label>
     <div class="sheet-body" id="ingredients-list"></div>
     <footer class="sheet-actions">
       <button type="button" class="text-btn" id="ingredients-clear">Tout effacer</button>
