@@ -47,7 +47,14 @@
              autocomplete="off" autocapitalize="none" aria-label="Rechercher une recette">
     </div>
 
-    <div class="chips filter-chips" id="filter-chips"></div>
+    <!-- Bouton d'ouverture de la feuille + rappel des ingrédients actifs -->
+    <div class="filter-bar" id="filter-bar">
+      <button type="button" class="filter-btn" id="ingredients-btn">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span id="ingredients-btn-label">Ingrédients</span>
+      </button>
+      <div id="selected-chips"></div>
+    </div>
 
     <ul class="recipe-list" id="recipe-list"></ul>
 
@@ -66,6 +73,26 @@
     <footer class="sheet-actions">
       <button type="button" class="text-btn" id="recipe-dialog-edit">Modifier</button>
       <button type="button" class="text-btn danger" id="recipe-dialog-delete">Supprimer</button>
+    </footer>
+  </dialog>
+
+  <!-- Sélection des ingrédients à filtrer : la liste complète ne tient pas dans
+       une rangée dès qu'on a beaucoup d'ingrédients, d'où une feuille avec recherche. -->
+  <dialog id="ingredients-dialog" class="sheet">
+    <header class="sheet-header">
+      <h2>Ingrédients</h2>
+      <button type="button" id="ingredients-close" class="icon-btn" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </header>
+    <div class="searchbar">
+      <input type="search" id="ingredients-search" placeholder="Filtrer les ingrédients"
+             autocomplete="off" autocapitalize="none" aria-label="Filtrer les ingrédients">
+    </div>
+    <div class="sheet-body" id="ingredients-list"></div>
+    <footer class="sheet-actions">
+      <button type="button" class="text-btn" id="ingredients-clear">Tout effacer</button>
+      <button type="button" class="text-btn" id="ingredients-done">Terminé</button>
     </footer>
   </dialog>
 

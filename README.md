@@ -5,7 +5,7 @@ Index de recettes de cuisine : références vers vos livres (titre + page) ou re
 ## Fonctionnalités
 
 - Deux types de recettes : référence livre (titre, ingrédients, livre + page) ou recette complète (instructions Markdown rendues)
-- Recherche floue sur le titre (insensible aux accents), filtres multi-ingrédients
+- Recherche floue sur le titre (insensible aux accents), filtre par ingrédients via une feuille avec recherche et compteurs
 - Auto-complétion des livres et ingrédients déjà saisis
 - Export/import de tout ou partie des recettes en un fichier JSON (`recettes.cookbook.json`), interopérable avec l'app iOS native archivée sur la branche [`ios-app`](../../tree/ios-app)
 - Synchronisation optionnelle entre appareils via Google Drive (voir plus bas)

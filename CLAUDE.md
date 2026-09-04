@@ -55,11 +55,12 @@ Trois stores IndexedDB (base `cookbook`, version 2) :
 
 L'usage principal est la consultation de la liste : la plupart des recettes sont de simples références à des livres, et une ligne suffit à les afficher en entier. Il n'y a donc pas de volet détail.
 
-1. **Liste des recettes** (écran unique) — recherche fuzzy sur le titre (sous-séquence avec score, insensible accents/casse), filtres multi-ingrédients (chips, intersection). Chaque ligne porte le titre, le livre + page, les ingrédients, et un bouton « ⋯ » ouvrant modifier / supprimer
-2. **Popup de recette** — uniquement pour les recettes à contenu : un clic sur la ligne affiche les instructions Markdown rendues (titres, listes, gras/italique) et les chips d'ingrédients. Les références livre ne sont pas cliquables, tout est déjà dans la ligne
-3. **Ajout / édition** — dialog avec choix du type, saisie des ingrédients en tags avec suggestions, auto-complétion des titres de livres
-4. **Export / import** — export JSON de tout ou d'une sélection (téléchargement + Web Share si dispo) ; import avec déduplication des recettes identiques et récapitulatif
-5. **Synchronisation** — dialog : ID client OAuth, compte connecté, date de dernière synchro, bascule auto, boutons synchroniser / déconnecter
+1. **Liste des recettes** (écran unique) — recherche fuzzy sur le titre (sous-séquence avec score, insensible accents/casse), filtres multi-ingrédients (intersection). Chaque ligne porte le titre, le livre + page, les ingrédients, et un bouton « ⋯ » ouvrant modifier / supprimer
+2. **Feuille des ingrédients** — la liste complète ne tient pas dans une rangée de chips dès qu'elle s'allonge : la barre ne garde que le bouton d'ouverture et les ingrédients actifs (retirables d'un tap), le choix se fait dans une feuille avec recherche. Chaque ligne affiche le nombre de recettes qui associent cet ingrédient à ceux déjà cochés — un zéro, grisé, signale une combinaison sans résultat. L'ordre est figé à l'ouverture pour que cocher une case ne déplace pas les lignes
+3. **Popup de recette** — uniquement pour les recettes à contenu : un clic sur la ligne affiche les instructions Markdown rendues (titres, listes, gras/italique) et les chips d'ingrédients. Les références livre ne sont pas cliquables, tout est déjà dans la ligne
+4. **Ajout / édition** — dialog avec choix du type, saisie des ingrédients en tags avec suggestions, auto-complétion des titres de livres
+5. **Export / import** — export JSON de tout ou d'une sélection (téléchargement + Web Share si dispo) ; import avec déduplication des recettes identiques et récapitulatif
+6. **Synchronisation** — dialog : ID client OAuth, compte connecté, date de dernière synchro, bascule auto, boutons synchroniser / déconnecter
 
 Mise en page pensée pour le portrait : une seule colonne occupant toute la largeur du viewport. La coquille `.app` est `position: fixed` sur le viewport (pas de `dvh`, dont l'absence de support cassait le défilement) et seule la liste défile. Thème clair/sombre via `prefers-color-scheme`.
 

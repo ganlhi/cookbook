@@ -1,5 +1,6 @@
 import {
   fuzzyScore,
+  searchNormalize,
   normalizeIngredient,
   renderMarkdown,
   escapeHtml,
@@ -138,7 +139,14 @@ const $ = (id) => document.getElementById(id);
 const el = {
   app: $('app'),
   search: $('search'),
-  filterChips: $('filter-chips'),
+  filterBar: $('filter-bar'),
+  ingredientsBtn: $('ingredients-btn'),
+  ingredientsBtnLabel: $('ingredients-btn-label'),
+  selectedChips: $('selected-chips'),
+  ingredientsDialog: $('ingredients-dialog'),
+  ingredientsSearch: $('ingredients-search'),
+  ingredientsList: $('ingredients-list'),
+  ingredientsClear: $('ingredients-clear'),
   list: $('recipe-list'),
   emptyState: $('empty-state'),
   recipeDialog: $('recipe-dialog'),
@@ -227,10 +235,11 @@ function hasContent(recipe) {
 
 function render() {
   renderTopbar();
-  renderFilterChips();
+  renderFilterBar();
   renderList();
   renderEmptyState();
   renderRecipeDialog();
+  renderIngredientsDialog();
 }
 
 function renderTopbar() {
@@ -241,20 +250,117 @@ function renderTopbar() {
   el.exportSelectionBtn.disabled = state.selection.size === 0;
 }
 
-function renderFilterChips() {
-  el.filterChips.innerHTML = '';
-  for (const name of allIngredients()) {
+/**
+ * La barre ne porte que le bouton d'ouverture et les ingrédients actifs : la
+ * liste complète ne tient pas dans une rangée dès qu'elle s'allonge, elle vit
+ * donc dans une feuille dédiée avec recherche.
+ */
+function renderFilterBar() {
+  el.filterBar.hidden = state.recipes.length === 0;
+
+  const selected = [...state.selectedIngredients].sort();
+  el.ingredientsBtnLabel.textContent = selected.length
+    ? `Ingrédients (${selected.length})`
+    : 'Ingrédients';
+  el.ingredientsBtn.classList.toggle('active', selected.length > 0);
+
+  el.selectedChips.innerHTML = '';
+  for (const name of selected) {
     const chip = document.createElement('button');
-    chip.className = 'chip' + (state.selectedIngredients.has(name) ? ' selected' : '');
-    chip.textContent = name;
+    chip.type = 'button';
+    chip.className = 'chip selected removable';
+    chip.innerHTML = `${escapeHtml(name)}<span class="remove-glyph" aria-hidden="true">×</span>`;
+    chip.setAttribute('aria-label', `Retirer le filtre ${name}`);
     chip.onclick = () => {
-      state.selectedIngredients.has(name)
-        ? state.selectedIngredients.delete(name)
-        : state.selectedIngredients.add(name);
+      state.selectedIngredients.delete(name);
       render();
     };
-    el.filterChips.append(chip);
+    el.selectedChips.append(chip);
   }
+}
+
+/**
+ * Pour chaque ingrédient, le nombre de recettes qui l'associent aux *autres*
+ * ingrédients déjà cochés — donc ce que donnerait la liste si on le cochait.
+ * Un zéro signale une combinaison sans résultat, sans avoir à l'essayer.
+ */
+function ingredientCounts() {
+  const counts = new Map();
+  for (const name of allIngredients()) {
+    const others = [...state.selectedIngredients].filter((selected) => selected !== name);
+    const matching = state.recipes.filter((recipe) => {
+      const names = new Set(recipe.ingredients);
+      return names.has(name) && others.every((other) => names.has(other));
+    });
+    counts.set(name, matching.length);
+  }
+  return counts;
+}
+
+// Ordre figé à l'ouverture de la feuille : cocher une case ne doit pas faire
+// bouger les lignes sous le doigt.
+let ingredientOrder = [];
+
+function openIngredientsDialog() {
+  el.ingredientsSearch.value = '';
+  ingredientOrder = allIngredients().sort((a, b) => {
+    const pinned = Number(state.selectedIngredients.has(b)) - Number(state.selectedIngredients.has(a));
+    return pinned || a.localeCompare(b, 'fr');
+  });
+  el.ingredientsDialog.showModal();
+  renderIngredientsDialog();
+}
+
+function renderIngredientsDialog() {
+  if (!el.ingredientsDialog.open) return;
+
+  // L'ordre figé peut avoir vieilli (une synchro a pu passer entre-temps).
+  const existing = new Set(allIngredients());
+  const known = new Set(ingredientOrder);
+  ingredientOrder = [
+    ...ingredientOrder.filter((name) => existing.has(name)),
+    ...allIngredients().filter((name) => !known.has(name)),
+  ];
+
+  const query = searchNormalize(el.ingredientsSearch.value);
+  const names = ingredientOrder.filter((name) => !query || searchNormalize(name).includes(query));
+  const counts = ingredientCounts();
+
+  el.ingredientsClear.disabled = state.selectedIngredients.size === 0;
+
+  // Le rendu est intégral : on remet le défilement où il était.
+  const scroll = el.ingredientsList.scrollTop;
+  el.ingredientsList.innerHTML = '';
+
+  if (names.length === 0) {
+    el.ingredientsList.innerHTML =
+      '<p class="ingredient-empty-state">Aucun ingrédient ne correspond.</p>';
+    return;
+  }
+
+  for (const name of names) {
+    const checked = state.selectedIngredients.has(name);
+    const count = counts.get(name) ?? 0;
+
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'ingredient-row'
+      + (checked ? ' checked' : '')
+      + (!checked && count === 0 ? ' unavailable' : '');
+    row.setAttribute('aria-pressed', String(checked));
+    row.innerHTML = `
+      <span class="ingredient-box" aria-hidden="true">${checked ? '✓' : ''}</span>
+      <span class="ingredient-name">${escapeHtml(name)}</span>
+      <span class="ingredient-count">${count}</span>`;
+    row.onclick = () => {
+      if (checked) state.selectedIngredients.delete(name);
+      else state.selectedIngredients.add(name);
+      render();
+    };
+    el.ingredientsList.append(row);
+  }
+
+  el.ingredientsList.scrollTop = scroll;
 }
 
 function renderList() {
@@ -875,6 +981,19 @@ el.recipeDialog.addEventListener('click', (event) => {
 });
 el.rowMenu.addEventListener('click', (event) => {
   if (event.target === el.rowMenu) el.rowMenu.close();
+});
+
+// Feuille des ingrédients
+el.ingredientsBtn.addEventListener('click', openIngredientsDialog);
+el.ingredientsSearch.addEventListener('input', renderIngredientsDialog);
+el.ingredientsClear.addEventListener('click', () => {
+  state.selectedIngredients.clear();
+  render();
+});
+$('ingredients-close').addEventListener('click', () => el.ingredientsDialog.close());
+$('ingredients-done').addEventListener('click', () => el.ingredientsDialog.close());
+el.ingredientsDialog.addEventListener('click', (event) => {
+  if (event.target === el.ingredientsDialog) el.ingredientsDialog.close();
 });
 
 // Synchronisation

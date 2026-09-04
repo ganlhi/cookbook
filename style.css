@@ -167,8 +167,49 @@ button {
 }
 .chips::-webkit-scrollbar { display: none; }
 
-.filter-chips { padding: 8px 16px; }
-.filter-chips:empty { display: none; }
+/* ---------- Barre de filtre par ingrédient ---------- */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+}
+
+/* `contents` fait participer les chips à l'enroulement de la barre elle-même. */
+#selected-chips { display: contents; }
+
+.filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+.filter-btn svg { width: 15px; height: 15px; }
+.filter-btn.active { color: var(--accent); border-color: var(--accent); }
+
+.chip.removable {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 9px;
+}
+
+.chip.removable .remove-glyph {
+  font-size: 1.05rem;
+  line-height: 1;
+  opacity: 0.75;
+}
 
 .chip {
   flex: none;
@@ -358,6 +399,62 @@ button {
   flex-wrap: wrap;
   overflow: visible;
   margin-bottom: 18px;
+}
+
+/* ---------- Feuille de sélection des ingrédients ---------- */
+#ingredients-dialog .sheet-body { padding: 4px 8px 12px; }
+
+.ingredient-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 10px;
+  padding: 11px 12px;
+  cursor: pointer;
+}
+
+.ingredient-row:active { background: var(--chip-bg); }
+
+/* Aucune recette ne combine cet ingrédient avec la sélection en cours. */
+.ingredient-row.unavailable { opacity: 0.45; }
+
+.ingredient-box {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.ingredient-row.checked .ingredient-box {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.ingredient-name { flex: 1; min-width: 0; }
+
+.ingredient-count {
+  flex: none;
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.ingredient-empty-state {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--text-secondary);
 }
 
 .danger { color: var(--danger); }
